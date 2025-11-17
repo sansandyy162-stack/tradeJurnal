@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jurnal Trading Saham Indonesia</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Jurnal Trading Saham Indonesia</h1>
+            <nav>
+                <button id="homeBtn" class="nav-btn active">Home</button>
+                <button id="addBtn" class="nav-btn">Tambah Data</button>
+                <button id="reportBtn" class="nav-btn">Laporan</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Home Section -->
+            <section id="home" class="section active">
+                <h2>Ringkasan Trading</h2>
+                
+                <div class="summary-cards">
+                    <div class="card">
+                        <h3>Total P/L</h3>
+                        <p id="totalPL" class="pl-value">Rp 0</p>
+                    </div>
+                    <div class="card">
+                        <h3>Win Rate</h3>
+                        <p id="winRate">0%</p>
+                    </div>
+                    <div class="card">
+                        <h3>Total Trading</h3>
+                        <p id="totalTrades">0</p>
+                    </div>
+                    <div class="card">
+                        <h3>Profit Terbesar</h3>
+                        <p id="maxProfit" class="pl-value">Rp 0</p>
+                    </div>
+                </div>
+                
+                <div class="charts">
+                    <div class="chart-container">
+                        <h3>Profit/Loss per Bulan</h3>
+                        <canvas id="lineChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Distribusi Metode Trading</h3>
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Add Data Section -->
+            <section id="add-data" class="section">
+                <h2>Tambah Data Trading</h2>
+                <form id="tradingForm">
+                    <div class="form-group">
+                        <label for="tanggalMasuk">Tanggal Masuk:</label>
+                        <input type="date" id="tanggalMasuk" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="tanggalKeluar">Tanggal Keluar:</label>
+                        <input type="date" id="tanggalKeluar" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="kodeSaham">Kode Saham:</label>
+                        <input type="text" id="kodeSaham" placeholder="Contoh: BBCA, TLKM" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hargaMasuk">Harga Masuk:</label>
+                        <input type="number" id="hargaMasuk" step="0.01" placeholder="Rp" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hargaKeluar">Harga Keluar:</label>
+                        <input type="number" id="hargaKeluar" step="0.01" placeholder="Rp" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="feeBroker">Fee Broker (%):</label>
+                        <input type="number" id="feeBroker" step="0.0001" value="0.4026" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="metodeTrading">Metode Trading:</label>
+                        <select id="metodeTrading" required>
+                            <option value="">Pilih Metode</option>
+                            <option value="Scalping">Scalping</option>
+                            <option value="Day Trade">Day Trade</option>
+                            <option value="Swing">Swing</option>
+                            <option value="Investasi">Investasi</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="catatan">Catatan:</label>
+                        <textarea id="catatan" rows="3" placeholder="Catatan tambahan tentang trading ini"></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" id="submitBtn">Simpan Data</button>
+                        <button type="reset" id="resetBtn">Reset</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Report Section -->
+            <section id="report" class="section">
+                <h2>Laporan Trading</h2>
+                
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="filterMetode">Filter Metode:</label>
+                        <select id="filterMetode">
+                            <option value="">Semua</option>
+                            <option value="Scalping">Scalping</option>
+                            <option value="Day Trade">Day Trade</option>
+                            <option value="Swing">Swing</option>
+                            <option value="Investasi">Investasi</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filterBulan">Filter Bulan:</label>
+                        <input type="month" id="filterBulan">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filterSaham">Filter Saham:</label>
+                        <input type="text" id="filterSaham" placeholder="Kode saham">
+                    </div>
+                    
+                    <button id="applyFilters">Terapkan Filter</button>
+                    <button id="resetFilters">Reset Filter</button>
+                </div>
+                
+                <div class="table-container">
+                    <table id="tradingTable">
+                        <thead>
+                            <tr>
+                                <th>Tanggal Masuk</th>
+                                <th>Tanggal Keluar</th>
+                                <th>Kode Saham</th>
+                                <th>Harga Masuk</th>
+                                <th>Harga Keluar</th>
+                                <th>Fee</th>
+                                <th>Metode</th>
+                                <th>P/L</th>
+                                <th>Catatan</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tradingTableBody">
+                            <!-- Data akan diisi oleh JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal untuk Edit Data -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Edit Data Trading</h2>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label for="editTanggalMasuk">Tanggal Masuk:</label>
+                    <input type="date" id="editTanggalMasuk" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editTanggalKeluar">Tanggal Keluar:</label>
+                    <input type="date" id="editTanggalKeluar" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editKodeSaham">Kode Saham:</label>
+                    <input type="text" id="editKodeSaham" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editHargaMasuk">Harga Masuk:</label>
+                    <input type="number" id="editHargaMasuk" step="0.01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editHargaKeluar">Harga Keluar:</label>
+                    <input type="number" id="editHargaKeluar" step="0.01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editFeeBroker">Fee Broker (%):</label>
+                    <input type="number" id="editFeeBroker" step="0.0001" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editMetodeTrading">Metode Trading:</label>
+                    <select id="editMetodeTrading" required>
+                        <option value="Scalping">Scalping</option>
+                        <option value="Day Trade">Day Trade</option>
+                        <option value="Swing">Swing</option>
+                        <option value="Investasi">Investasi</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editCatatan">Catatan:</label>
+                    <textarea id="editCatatan" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" id="updateBtn">Update Data</button>
+                    <button type="button" id="cancelEdit">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
