@@ -1,6 +1,6 @@
 // Konfigurasi Google Sheets
 const SHEET_ID = '1uPaO-QgPml4A3sSH1IWIBPY9jj8uI71clhDRr1ukuhU'; // Ganti dengan ID Google Sheet Anda
-const API_KEY = 'AIzaSyBy_dLuPEQnnw7WKYSQEoNhzSUUUpnzILM'; // Ganti dengan API Key Anda
+const API_KEY = '  '; // Ganti dengan API Key Anda
 const SHEET_NAME = 'TradingData';
 
 // Variabel global
@@ -517,4 +517,5 @@ async function deleteTradingData(id) {
     
     // Tampilkan notifikasi
     alert('Data trading berhasil dihapus!');
+
 }
