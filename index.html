@@ -15,6 +15,7 @@
                 <button id="homeBtn" class="nav-btn active">Home</button>
                 <button id="addBtn" class="nav-btn">Tambah Data</button>
                 <button id="reportBtn" class="nav-btn">Laporan</button>
+                <button id="performanceBtn" class="nav-btn">Performance</button> <!-- Tambah ini -->
             </nav>
         </header>
 
@@ -84,8 +85,15 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="feeBroker">Fee Broker (%):</label>
-                        <input type="number" id="feeBroker" step="0.0001" value="0.4026" required>
+                        <label for="lot">Jumlah LOT:</label>
+                        <input type="number" id="lot" step="1" min="1" value="1" required>
+                    </div>
+
+                    <!-- Ubah menjadi optional dengan placeholder -->
+                    <div class="form-group">
+                        <label for="feeBroker">Fee Broker (Rp):</label>
+                        <input type="number" id="feeBroker" step="100" min="0" placeholder="Kosongkan untuk pakai 0.4026%">
+                        <small class="fee-note">Biarkan kosong untuk fee otomatis 0.4026%</small>
                     </div>
                     
                     <div class="form-group">
@@ -94,11 +102,12 @@
                             <option value="">Pilih Metode</option>
                             <option value="Scalping">Scalping</option>
                             <option value="Day Trade">Day Trade</option>
+                            <option value="BSJP">BSJP</option>
                             <option value="Swing">Swing</option>
                             <option value="Investasi">Investasi</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="catatan">Catatan:</label>
                         <textarea id="catatan" rows="3" placeholder="Catatan tambahan tentang trading ini"></textarea>
@@ -150,6 +159,7 @@
                                 <th>Kode Saham</th>
                                 <th>Harga Masuk</th>
                                 <th>Harga Keluar</th>
+                                <th>LOT</th>
                                 <th>Fee</th>
                                 <th>Metode</th>
                                 <th>P/L</th>
@@ -163,16 +173,110 @@
                     </table>
                 </div>
             </section>
+            <!-- Performance Section -->
+            <section id="performance" class="section">
+                <h2>Analisis Performance</h2>
+                
+                <div class="performance-tabs">
+                    <button class="perf-tab active" data-tab="saham">Performance by Saham</button>
+                    <button class="perf-tab" data-tab="metode">Win Rate by Metode</button>
+                    <button class="perf-tab" data-tab="summary">Summary Trading</button>
+                </div>
+                
+                <!-- Performance by Saham -->
+                <div id="tab-saham" class="perf-tab-content active">
+                    <h3>Performance per Kode Saham</h3>
+                    <div class="table-container">
+                        <table id="sahamPerformanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Kode Saham</th>
+                                    <th>Total Trading</th>
+                                    <th>Win</th>
+                                    <th>Loss</th>
+                                    <th>Win Rate</th>
+                                    <th>Total Profit</th>
+                                    <th>Avg Profit</th>
+                                    <th>Best Trade</th>
+                                    <th>Worst Trade</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sahamPerformanceBody">
+                                <!-- Data akan diisi oleh JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Win Rate by Metode -->
+                <div id="tab-metode" class="perf-tab-content">
+                    <h3>Win Rate per Metode Trading</h3>
+                    <div class="table-container">
+                        <table id="metodePerformanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Metode Trading</th>
+                                    <th>Total Trading</th>
+                                    <th>Win</th>
+                                    <th>Loss</th>
+                                    <th>Win Rate</th>
+                                    <th>Total Profit</th>
+                                    <th>Avg Profit</th>
+                                    <th>Success Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metodePerformanceBody">
+                                <!-- Data akan diisi oleh JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Summary Trading -->
+                <div id="tab-summary" class="perf-tab-content">
+                    <h3>Summary Trading Lengkap</h3>
+                    <div class="summary-cards">
+                        <div class="card">
+                            <h3>Total Semua Trading</h3>
+                            <p id="totalAllTrades">0</p>
+                        </div>
+                        <div class="card">
+                            <h3>Total Win</h3>
+                            <p id="totalWins">0</p>
+                        </div>
+                        <div class="card">
+                            <h3>Total Loss</h3>
+                            <p id="totalLosses">0</p>
+                        </div>
+                        <div class="card">
+                            <h3>Overall Win Rate</h3>
+                            <p id="overallWinRate">0%</p>
+                        </div>
+                    </div>
+                    
+                    <div class="charts">
+                        <div class="chart-container">
+                            <h3>Distribusi Profit/Loss</h3>
+                            <canvas id="distributionChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Win Rate per Metode</h3>
+                            <canvas id="winRateChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
-    <!-- Modal untuk Edit Data -->
+        <!-- Modal untuk Edit Data -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
             <h2>Edit Data Trading</h2>
             <form id="editForm">
                 <input type="hidden" id="editId">
+                
                 <div class="form-group">
                     <label for="editTanggalMasuk">Tanggal Masuk:</label>
                     <input type="date" id="editTanggalMasuk" required>
@@ -199,8 +303,14 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="editFeeBroker">Fee Broker (%):</label>
-                    <input type="number" id="editFeeBroker" step="0.0001" required>
+                    <label for="editLot">Jumlah LOT:</label>
+                    <input type="number" id="editLot" step="1" min="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editFeeBroker">Fee Broker (Rp):</label>
+                    <input type="number" id="editFeeBroker" step="100" min="0" placeholder="Kosongkan untuk pakai 0.4026%">
+                    <small class="fee-note">Biarkan kosong untuk fee otomatis 0.4026%</small>
                 </div>
                 
                 <div class="form-group">
@@ -208,6 +318,7 @@
                     <select id="editMetodeTrading" required>
                         <option value="Scalping">Scalping</option>
                         <option value="Day Trade">Day Trade</option>
+                        <option value="BSJP">BSJP</option>
                         <option value="Swing">Swing</option>
                         <option value="Investasi">Investasi</option>
                     </select>
@@ -215,12 +326,12 @@
                 
                 <div class="form-group">
                     <label for="editCatatan">Catatan:</label>
-                    <textarea id="editCatatan" rows="3"></textarea>
+                    <textarea id="editCatatan" rows="3" placeholder="Catatan tambahan tentang trading ini"></textarea>
                 </div>
                 
                 <div class="form-actions">
-                    <button type="submit" id="updateBtn">Update Data</button>
-                    <button type="button" id="cancelEdit">Batal</button>
+                    <button type="submit" id="updateBtn" class="btn-primary">Update Data</button>
+                    <button type="button" id="cancelEdit" class="btn-secondary">Batal</button>
                 </div>
             </form>
         </div>
