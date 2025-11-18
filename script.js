@@ -1,5 +1,5 @@
 // Konfigurasi Google Apps Script
-const APPS_SCRIPT_URL = 'hhttps://script.google.com/macros/s/AKfycbzjrJQodARnBDZ8HeVAKZNdCJ2SNL_Jz-7szHZd3D_50s6DXkcQMqW6LbMu13YhIaWB/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzjrJQodARnBDZ8HeVAKZNdCJ2SNL_Jz-7szHZd3D_50s6DXkcQMqW6LbMu13YhIaWB/exec';
 
 // Variabel global
 let tradingData = [];
@@ -1172,3 +1172,4 @@ function showSection(sectionId) {
         displayTradingSummary();
     }
 }
+
