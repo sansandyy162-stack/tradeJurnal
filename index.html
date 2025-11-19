@@ -16,6 +16,7 @@
                 <button id="addBtn" class="nav-btn">Tambah Data</button>
                 <button id="reportBtn" class="nav-btn">Laporan</button>
                 <button id="performanceBtn" class="nav-btn">Performance</button> <!-- Tambah ini -->
+                <button class="nav-btn" id="calculatorBtn">🧮 Kalkulator</button>
             </nav>
         </header>
 
@@ -266,6 +267,118 @@
                     </div>
                 </div>
             </section>
+            <!-- Tambahkan section ini setelah section performance -->
+            <section id="calculator" class="section">
+                <div class="section-header">
+                    <h2>🧮 Kalkulator Profit/Loss</h2>
+                    <p>Hitung estimasi harga jual & persentase profit</p>
+                </div>
+                
+                <div class="calculator-container">
+                    <div class="mode-selector">
+                        <button class="mode-btn active" id="modeTarget">
+                            🎯 Mode Target Profit
+                        </button>
+                        <button class="mode-btn" id="modeExit">
+                            💰 Mode Harga Exit
+                        </button>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="calcEntryPrice">Harga Entry (Rp)</label>
+                        <input type="number" id="calcEntryPrice" placeholder="Contoh: 1500" min="1">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="calcLotSize">Jumlah LOT</label>
+                        <input type="number" id="calcLotSize" placeholder="Contoh: 10" min="1" value="1">
+                    </div>
+                    
+                    <div class="input-group" id="targetProfitGroup">
+                        <label for="calcTargetProfit">Target Profit (Rp)</label>
+                        <input type="number" id="calcTargetProfit" placeholder="Contoh: 500000" min="1">
+                        <div class="input-hint">Isi target profit yang diinginkan</div>
+                    </div>
+                    
+                    <div class="input-group" id="exitPriceGroup" style="display: none;">
+                        <label for="calcExitPrice">Harga Exit (Rp)</label>
+                        <input type="number" id="calcExitPrice" placeholder="Contoh: 1600" min="1">
+                        <div class="input-hint">Isi harga jual yang direncanakan</div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="calcFeeBuy">Fee Beli (%)</label>
+                        <input type="number" id="calcFeeBuy" placeholder="0.15" step="0.01" min="0" value="0.15">
+                        <div class="fee-info">Biaya broker saat pembelian (dari total beli)</div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="calcFeeSell">Fee Jual (%)</label>
+                        <input type="number" id="calcFeeSell" placeholder="0.25" step="0.01" min="0" value="0.25">
+                        <div class="fee-info">Biaya broker saat penjualan (dari total jual)</div>
+                    </div>
+                    
+                    <button class="calculate-btn" id="calcCalculateBtn">
+                        🧮 Hitung Estimasi
+                    </button>
+                    
+                    <div id="calcResultContainer" class="result-container">
+                        <div class="result-item">
+                            <span class="result-label">Harga Jual Estimasi:</span>
+                            <span class="result-value" id="calcExitPriceResult">-</span>
+                        </div>
+                        
+                        <div class="result-item">
+                            <span class="result-label">Profit/Loss:</span>
+                            <span class="result-value" id="calcProfitLossResult">-</span>
+                        </div>
+                        
+                        <div class="result-item">
+                            <span class="result-label">Kenaikan Harga:</span>
+                            <span class="result-value" id="calcPriceIncreaseResult">-</span>
+                        </div>
+                        
+                        <div class="result-item">
+                            <span class="result-label">Persentase Profit:</span>
+                            <span class="result-value" id="calcProfitPercentageResult">-</span>
+                        </div>
+                        
+                        <div class="breakdown">
+                            <div class="breakdown-title">Detail Perhitungan:</div>
+                            
+                            <div class="result-item">
+                                <span class="result-label">Total Saham:</span>
+                                <span class="result-value" id="calcTotalSharesResult">-</span>
+                            </div>
+                            
+                            <div class="result-item">
+                                <span class="result-label">Nilai Beli:</span>
+                                <span class="result-value" id="calcBuyValueResult">-</span>
+                            </div>
+                            
+                            <div class="result-item">
+                                <span class="result-label">Nilai Jual:</span>
+                                <span class="result-value" id="calcSellValueResult">-</span>
+                            </div>
+                            
+                            <div class="result-item">
+                                <span class="result-label">Fee Beli:</span>
+                                <span class="result-value" id="calcFeeBuyAmountResult">-</span>
+                            </div>
+                            
+                            <div class="result-item">
+                                <span class="result-label">Fee Jual:</span>
+                                <span class="result-value" id="calcFeeSellAmountResult">-</span>
+                            </div>
+                            
+                            <div class="result-item">
+                                <span class="result-label">Total Fee:</span>
+                                <span class="result-value" id="calcTotalFeeResult">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -340,3 +453,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+
