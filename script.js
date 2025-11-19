@@ -52,6 +52,7 @@ function setupEventListeners() {
     document.getElementById('homeBtn').addEventListener('click', () => showSection('home'));
     document.getElementById('addBtn').addEventListener('click', () => showSection('add-data'));
     document.getElementById('reportBtn').addEventListener('click', () => showSection('report'));
+    document.getElementById('calculatorBtn').addEventListener('click', () => showSection('calculator'));
     
     // Form submission
     document.getElementById('tradingForm').addEventListener('submit', handleFormSubmit);
@@ -1222,6 +1223,7 @@ function setupEventListeners() {
     document.getElementById('addBtn').addEventListener('click', () => showSection('add-data'));
     document.getElementById('reportBtn').addEventListener('click', () => showSection('report'));
     document.getElementById('performanceBtn').addEventListener('click', () => showSection('performance'));
+    document.getElementById('calculatorBtn').addEventListener('click', () => showSection('calculator'));
     
     // Form submission - PASTIKAN INI BENAR
     const tradingForm = document.getElementById('tradingForm');
@@ -1297,5 +1299,6 @@ function showSection(sectionId) {
         displayTradingSummary();
     }
 }
+
 
 
