@@ -97,13 +97,20 @@ function setupCalculatorListeners() {
     document.getElementById('calcFeeSell').addEventListener('input', calculateProfitLoss);
 }
 function showSection(sectionId) {
+    console.log('Showing section:', sectionId);
     // Sembunyikan semua section
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
     });
     
     // Tampilkan section yang dipilih
-    document.getElementById(sectionId).classList.add('active');
+    const targetSection = document.getElementById(sectionId);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    } else {
+        console.error('Section not found:', sectionId);
+        return;
+    }
     
     // Update tombol navigasi aktif
     document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -111,7 +118,11 @@ function showSection(sectionId) {
     });
     
     const btn = document.querySelector(`#${sectionId}Btn`);
-    if (btn) btn.classList.add('active');
+    if (btn) {
+        btn.classList.add('active');
+    } else {
+        console.error('Button not found for section:', sectionId);
+    }
     
     // Jika pindah ke home, update summary dan chart
     if (sectionId === 'home') {
@@ -1299,6 +1310,7 @@ function showSection(sectionId) {
         displayTradingSummary();
     }
 }
+
 
 
 
