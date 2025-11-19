@@ -603,3 +603,146 @@ input::placeholder {
         font-size: 12px;
     }
 }
+
+/* Kalkulator Styles */
+.calculator-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.mode-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    text-align: center;
+    font-weight: 500;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.mode-btn.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.input-hint {
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+.fee-info {
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+.calculate-btn {
+    width: 100%;
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s;
+    margin-top: 10px;
+}
+
+.calculate-btn:hover {
+    background: #2980b9;
+}
+
+.result-container {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    display: none;
+}
+
+.result-container.show {
+    display: block;
+    animation: fadeIn 0.5s;
+}
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.result-label {
+    color: #2c3e50;
+}
+
+.result-value {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.profit {
+    color: #27ae60;
+}
+
+.loss {
+    color: #e74c3c;
+}
+
+.breakdown {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 2px dashed #bdc3c7;
+}
+
+.breakdown-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
