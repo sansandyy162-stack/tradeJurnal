@@ -77,25 +77,61 @@ function setupEventListeners() {
     // Initialize fee preview
     setupFeePreview();
 }
+// Setup event listeners untuk kalkulator - PERBAIKI INI
 function setupCalculatorListeners() {
-    // Navigation
-    document.getElementById('calculatorBtn').addEventListener('click', () => showSection('calculator'));
+    console.log('🔧 Setting up calculator listeners...');
+    
+    // Cek apakah element ada
+    const modeTarget = document.getElementById('modeTarget');
+    const modeExit = document.getElementById('modeExit');
+    const calcBtn = document.getElementById('calcCalculateBtn');
+    
+    if (!modeTarget || !modeExit || !calcBtn) {
+        console.error('❌ Calculator elements not found!');
+        console.log('modeTarget:', modeTarget);
+        console.log('modeExit:', modeExit);
+        console.log('calcBtn:', calcBtn);
+        return;
+    }
     
     // Mode buttons
-    document.getElementById('modeTarget').addEventListener('click', () => setCalcMode('target'));
-    document.getElementById('modeExit').addEventListener('click', () => setCalcMode('exit'));
+    modeTarget.addEventListener('click', function() {
+        console.log('🎯 Mode Target clicked');
+        setCalcMode('target');
+    });
+    
+    modeExit.addEventListener('click', function() {
+        console.log('💰 Mode Exit clicked');
+        setCalcMode('exit');
+    });
     
     // Calculate button
-    document.getElementById('calcCalculateBtn').addEventListener('click', calculateProfitLoss);
+    calcBtn.addEventListener('click', function() {
+        console.log('🧮 Calculate button clicked');
+        calculateProfitLoss();
+    });
     
     // Auto-calculate ketika input berubah
-    document.getElementById('calcEntryPrice').addEventListener('input', calculateProfitLoss);
-    document.getElementById('calcLotSize').addEventListener('input', calculateProfitLoss);
-    document.getElementById('calcTargetProfit').addEventListener('input', calculateProfitLoss);
-    document.getElementById('calcExitPrice').addEventListener('input', calculateProfitLoss);
-    document.getElementById('calcFeeBuy').addEventListener('input', calculateProfitLoss);
-    document.getElementById('calcFeeSell').addEventListener('input', calculateProfitLoss);
+    const inputs = [
+        'calcEntryPrice', 'calcLotSize', 'calcTargetProfit', 
+        'calcExitPrice', 'calcFeeBuy', 'calcFeeSell'
+    ];
+    
+    inputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('input', function() {
+                console.log(`Input ${inputId} changed:`, this.value);
+                calculateProfitLoss();
+            });
+        } else {
+            console.error(`Input not found: ${inputId}`);
+        }
+    });
+    
+    console.log('✅ Calculator listeners setup completed');
 }
+
 function showSection(sectionId) {
     console.log('Showing section:', sectionId);
     // Sembunyikan semua section
@@ -133,50 +169,77 @@ function showSection(sectionId) {
         setCalcMode('target');
     }
 }
-// Fungsi untuk set mode kalkulator
+// Fungsi untuk set mode kalkulator - PERBAIKI INI
 function setCalcMode(mode) {
+    console.log('🔄 Setting calculator mode to:', mode);
+    
     calcCurrentMode = mode;
     
     // Update tombol mode
-    document.getElementById('modeTarget').classList.toggle('active', mode === 'target');
-    document.getElementById('modeExit').classList.toggle('active', mode === 'exit');
+    const modeTarget = document.getElementById('modeTarget');
+    const modeExit = document.getElementById('modeExit');
+    
+    if (modeTarget && modeExit) {
+        modeTarget.classList.toggle('active', mode === 'target');
+        modeExit.classList.toggle('active', mode === 'exit');
+    }
     
     // Tampilkan/sembunyikan input yang sesuai
-    document.getElementById('targetProfitGroup').style.display = mode === 'target' ? 'block' : 'none';
-    document.getElementById('exitPriceGroup').style.display = mode === 'exit' ? 'block' : 'none';
+    const targetGroup = document.getElementById('targetProfitGroup');
+    const exitGroup = document.getElementById('exitPriceGroup');
+    
+    if (targetGroup && exitGroup) {
+        targetGroup.style.display = mode === 'target' ? 'block' : 'none';
+        exitGroup.style.display = mode === 'exit' ? 'block' : 'none';
+    }
     
     // Reset input yang tidak aktif
     if (mode === 'target') {
-        document.getElementById('calcExitPrice').value = '';
+        const exitInput = document.getElementById('calcExitPrice');
+        if (exitInput) exitInput.value = '';
     } else {
-        document.getElementById('calcTargetProfit').value = '';
+        const targetInput = document.getElementById('calcTargetProfit');
+        if (targetInput) targetInput.value = '';
     }
     
     // Sembunyikan hasil sebelumnya
-    document.getElementById('calcResultContainer').classList.remove('show');
+    const resultContainer = document.getElementById('calcResultContainer');
+    if (resultContainer) {
+        resultContainer.classList.remove('show');
+    }
+    
+    console.log('✅ Calculator mode set to:', mode);
 }
 
-// Fungsi kalkulator profit/loss
+// Fungsi kalkulator profit/loss - TAMBAHKAN LOGGING
 function calculateProfitLoss() {
+    console.log('🧮 Starting profit/loss calculation...');
+    
     // Ambil nilai input
     const entryPrice = parseFloat(document.getElementById('calcEntryPrice').value) || 0;
     const lotSize = parseInt(document.getElementById('calcLotSize').value) || 1;
     const feeBuy = parseFloat(document.getElementById('calcFeeBuy').value) || 0;
     const feeSell = parseFloat(document.getElementById('calcFeeSell').value) || 0;
     
+    console.log('Input values:', { entryPrice, lotSize, feeBuy, feeSell, mode: calcCurrentMode });
+    
     // Validasi input dasar
     if (!entryPrice) {
+        console.log('❌ Missing entry price');
         alert('Harap isi Harga Entry!');
         return;
     }
     
     // Hitung total saham (1 LOT = 100 lembar)
     const totalShares = lotSize * 100;
+    console.log('Total shares:', totalShares);
     
     // Hitung nilai beli dan fee beli
     const buyValue = entryPrice * totalShares;
     const feeBuyAmount = buyValue * (feeBuy / 100);
     const totalCost = buyValue + feeBuyAmount;
+    
+    console.log('Buy calculation:', { buyValue, feeBuyAmount, totalCost });
     
     let exitPrice, actualProfit, targetProfit, sellValue, feeSellAmount;
     
@@ -184,8 +247,12 @@ function calculateProfitLoss() {
         // MODE TARGET PROFIT: Hitung Exit Price dari Target Profit
         targetProfit = parseFloat(document.getElementById('calcTargetProfit').value) || 0;
         
+        console.log('Target profit mode, targetProfit:', targetProfit);
+        
         if (!targetProfit) {
-            alert('Harap isi Target Profit!');
+            console.log('❌ Missing target profit');
+            // Jangan alert, biarkan user lihat hasil kosong
+            document.getElementById('calcResultContainer').classList.remove('show');
             return;
         }
         
@@ -196,12 +263,18 @@ function calculateProfitLoss() {
         const netProceeds = sellValue - feeSellAmount;
         actualProfit = netProceeds - totalCost;
         
+        console.log('Target mode calculation:', { exitPrice, sellValue, feeSellAmount, netProceeds, actualProfit });
+        
     } else {
         // MODE HARGA EXIT: Hitung Profit dari Harga Exit
         exitPrice = parseFloat(document.getElementById('calcExitPrice').value) || 0;
         
+        console.log('Exit price mode, exitPrice:', exitPrice);
+        
         if (!exitPrice) {
-            alert('Harap isi Harga Exit!');
+            console.log('❌ Missing exit price');
+            // Jangan alert, biarkan user lihat hasil kosong
+            document.getElementById('calcResultContainer').classList.remove('show');
             return;
         }
         
@@ -210,6 +283,8 @@ function calculateProfitLoss() {
         feeSellAmount = sellValue * (feeSell / 100);
         const netProceeds = sellValue - feeSellAmount;
         actualProfit = netProceeds - totalCost;
+        
+        console.log('Exit mode calculation:', { sellValue, feeSellAmount, netProceeds, actualProfit });
     }
     
     // Hitung komponen lainnya
@@ -217,16 +292,26 @@ function calculateProfitLoss() {
     const priceIncrease = exitPrice - entryPrice;
     const profitPercentage = ((exitPrice - entryPrice) / entryPrice) * 100;
     
+    console.log('Final results:', { totalFee, priceIncrease, profitPercentage });
+    
     // Tampilkan hasil
-    document.getElementById('calcExitPriceResult').textContent = formatCurrency(exitPrice);
+    const exitPriceResult = document.getElementById('calcExitPriceResult');
+    const profitLossResult = document.getElementById('calcProfitLossResult');
+    const priceIncreaseResult = document.getElementById('calcPriceIncreaseResult');
+    const profitPercentageResult = document.getElementById('calcProfitPercentageResult');
+    
+    if (exitPriceResult) exitPriceResult.textContent = formatCurrency(exitPrice);
     
     // Tampilkan profit/loss dengan warna
-    const profitLossElement = document.getElementById('calcProfitLossResult');
-    profitLossElement.textContent = formatCurrency(actualProfit);
-    profitLossElement.className = 'result-value ' + (actualProfit >= 0 ? 'profit' : 'loss');
+    if (profitLossResult) {
+        profitLossResult.textContent = formatCurrency(actualProfit);
+        profitLossResult.className = 'result-value ' + (actualProfit >= 0 ? 'profit' : 'loss');
+    }
     
-    document.getElementById('calcPriceIncreaseResult').textContent = formatCurrency(priceIncrease);
-    document.getElementById('calcProfitPercentageResult').textContent = profitPercentage.toFixed(2) + '%';
+    if (priceIncreaseResult) priceIncreaseResult.textContent = formatCurrency(priceIncrease);
+    if (profitPercentageResult) profitPercentageResult.textContent = profitPercentage.toFixed(2) + '%';
+    
+    // Update detail breakdown
     document.getElementById('calcTotalSharesResult').textContent = totalShares.toLocaleString() + ' lembar';
     document.getElementById('calcBuyValueResult').textContent = formatCurrency(buyValue);
     document.getElementById('calcSellValueResult').textContent = formatCurrency(sellValue);
@@ -235,7 +320,13 @@ function calculateProfitLoss() {
     document.getElementById('calcTotalFeeResult').textContent = formatCurrency(totalFee);
     
     // Tampilkan container hasil
-    document.getElementById('calcResultContainer').classList.add('show');
+    const resultContainer = document.getElementById('calcResultContainer');
+    if (resultContainer) {
+        resultContainer.classList.add('show');
+        console.log('✅ Results displayed');
+    } else {
+        console.error('❌ Result container not found');
+    }
 }
 // Fungsi untuk load data dari Google Apps Script - FIXED VERSION
 async function loadData() {
@@ -1310,6 +1401,7 @@ function showSection(sectionId) {
         displayTradingSummary();
     }
 }
+
 
 
 
