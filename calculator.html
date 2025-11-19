@@ -30,7 +30,33 @@
             max-width: 500px;
             width: 100%;
         }
+          /* NAVIGASI BACK */
+        .back-nav {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+        }
         
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            color: #333;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: 1px solid #e1e5e9;
+        }
+        
+        .back-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateX(-3px);
+        }
         h1 {
             text-align: center;
             color: #333;
@@ -197,6 +223,12 @@
 </head>
 <body>
     <div class="calculator-container">
+         <!-- NAVIGASI KEMBALI -->
+        <div class="back-nav">
+            <a href="index.html" class="back-btn">
+                ← Kembali ke Home
+            </a>
+        </div>
         <h1>🔄 Kalkulator Profit/Loss</h1>
         <p class="subtitle">Hitung estimasi harga jual & persentase profit</p>
         
