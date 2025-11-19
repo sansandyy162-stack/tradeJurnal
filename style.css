@@ -45,6 +45,9 @@ nav {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.3s;
+    text-decoration: none; /* Hilangkan underline */
+    text-align: center;
+    font-size: 14px;
 }
 
 .nav-btn:hover {
@@ -745,4 +748,5 @@ input::placeholder {
     margin-bottom: 10px;
     font-size: 14px;
 }
+
 
