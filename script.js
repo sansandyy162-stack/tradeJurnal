@@ -246,35 +246,47 @@ function generateId() {
 }
 
 // Fungsi untuk menghitung fee otomatis berdasarkan persentase 0.4026%
-function calculateAutoFee(hargaMasuk, hargaKeluar, lot, percentage = 0.4026) {
+function calculateAutoFee(hargaMasuk, hargaKeluar, lot) {
     const totalShares = lot * 100;
     const totalBuy = hargaMasuk * totalShares;
     const totalSell = hargaKeluar * totalShares;
-    const fee = (totalBuy + totalSell) * (percentage / 100);
-    return Math.round(fee);
+    
+    const feeBuy = Math.round(totalBuy * (0.1513 / 100));
+    const feeSell = Math.round(totalSell * (0.25132 / 100));
+    
+    return {
+        feeBuy: feeBuy,
+        feeSell: feeSell,
+        totalFee: feeBuy + feeSell
+    };
 }
 
-// Fungsi utama untuk menghitung profit/loss
-function calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBrokerInput) {
+function calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuyInput, feeSellInput) {
     const totalShares = lot * 100;
     const totalBuy = hargaMasuk * totalShares;
     const totalSell = hargaKeluar * totalShares;
     
-    let totalFee;
+    let feeBuy, feeSell;
     
-    // Jika user input fee manual, pakai nilai tersebut
-    if (feeBrokerInput !== null && feeBrokerInput !== '' && !isNaN(feeBrokerInput) && parseFloat(feeBrokerInput) > 0) {
-        totalFee = parseFloat(feeBrokerInput);
+    // Jika user input fee manual
+    if (feeBuyInput !== null && feeBuyInput !== '' && !isNaN(feeBuyInput) && 
+        feeSellInput !== null && feeSellInput !== '' && !isNaN(feeSellInput)) {
+        feeBuy = parseFloat(feeBuyInput);
+        feeSell = parseFloat(feeSellInput);
     } else {
-        // Jika kosong, pakai fee otomatis 0.4026%
-        totalFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
+        // Fee otomatis terpisah
+        feeBuy = Math.round(totalBuy * (0.1513 / 100));
+        feeSell = Math.round(totalSell * (0.25132 / 100));
     }
     
+    const totalFee = feeBuy + feeSell;
     const profitLoss = totalSell - totalBuy - totalFee;
     
     return {
         profitLoss: Math.round(profitLoss * 100) / 100,
         totalFee: totalFee,
+        feeBuy: feeBuy,
+        feeSell: feeSell,
         totalBuy: totalBuy,
         totalSell: totalSell
     };
@@ -398,15 +410,19 @@ function setupFeePreview() {
         const hargaMasuk = parseFloat(hargaMasukInput.value) || 0;
         const hargaKeluar = parseFloat(hargaKeluarInput.value) || 0;
         const lot = parseInt(lotInput.value) || 1;
-        const currentFee = feeBrokerInput.value;
+        const currentFeeBuy = feeBuyInput.value;
+        const currentFeeSell = feeSellInput.value;
         
         const previewElement = document.getElementById('feePreview');
         
         // Jika field fee kosong dan harga sudah diisi, tampilkan preview
-        if ((!currentFee || currentFee === '') && hargaMasuk > 0 && hargaKeluar > 0) {
+        if ((!currentFeeBuy || !currentFeeSell) && hargaMasuk > 0 && hargaKeluar > 0) {
             const autoFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
             previewElement.innerHTML = `
-                <strong>Fee Otomatis:</strong> ${formatCurrency(autoFee)} (0.4026% dari total transaksi)
+                <strong>Fee Otomatis:</strong><br>
+                • Fee Beli: ${formatCurrency(autoFee.feeBuy)} (0.1513% dari nilai beli)<br>
+                • Fee Jual: ${formatCurrency(autoFee.feeSell)} (0.25132% dari nilai jual)<br>
+                • Total Fee: ${formatCurrency(autoFee.totalFee)}
                 <br><small>Isi manual jika ingin mengubah</small>
             `;
             previewElement.style.display = 'block';
@@ -1186,6 +1202,7 @@ function showSection(sectionId) {
         displayTradingSummary();
     }
 }
+
 
 
 
