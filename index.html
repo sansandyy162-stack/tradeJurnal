@@ -15,7 +15,7 @@
                 <button id="homeBtn" class="nav-btn active">Home</button>
                 <button id="addBtn" class="nav-btn">Tambah Data</button>
                 <button id="reportBtn" class="nav-btn">Laporan</button>
-                <button id="performanceBtn" class="nav-btn">Performance</button> <!-- Tambah ini -->
+                <button id="performanceBtn" class="nav-btn">Performance</button>
                 <button class="nav-btn" onclick="window.location.href='calculator.html'">🧮 Kalkulator</button>
             </nav>
         </header>
@@ -90,19 +90,25 @@
                         <input type="number" id="lot" step="1" min="1" value="1" required>
                     </div>
 
-                    <!-- Ubah menjadi optional dengan placeholder -->
+                    <!-- Kolom Fee sesuai struktur baru -->
                     <div class="form-group">
-                        <label for="feeBuy">Fee Beli (Rp)</label>
-                        <input type="number" id="feeBuy" placeholder="Kosongkan untuk fee otomatis">
+                        <label for="feeBuy">Fee Beli (Rp):</label>
+                        <input type="number" id="feeBuy" step="0.01" placeholder="Kosongkan untuk fee otomatis">
                         <div class="fee-info">Fee otomatis: 0.1513% dari nilai beli</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="feeSell">Fee Jual (Rp)</label>
-                        <input type="number" id="feeSell" placeholder="Kosongkan untuk fee otomatis">
+                        <label for="feeSell">Fee Jual (Rp):</label>
+                        <input type="number" id="feeSell" step="0.01" placeholder="Kosongkan untuk fee otomatis">
                         <div class="fee-info">Fee otomatis: 0.25132% dari nilai jual</div>
                     </div>
                     
+                    <div class="form-group">
+                        <label for="totalFee">Total Fee (Rp):</label>
+                        <input type="number" id="totalFee" step="0.01" readonly>
+                        <div class="fee-info">Total fee akan dihitung otomatis</div>
+                    </div>
+
                     <div class="form-group">
                         <label for="metodeTrading">Metode Trading:</label>
                         <select id="metodeTrading" required>
@@ -119,9 +125,19 @@
                         <label for="catatan">Catatan:</label>
                         <textarea id="catatan" rows="3" placeholder="Catatan tambahan tentang trading ini"></textarea>
                     </div>
+
+                    <!-- Preview Profit/Loss -->
+                    <div class="form-group">
+                        <label>Estimasi Profit/Loss:</label>
+                        <div id="profitLossPreview" class="profit-preview">
+                            <span id="plAmount">Rp 0</span>
+                            <span id="plPercentage">0%</span>
+                        </div>
+                    </div>
                     
                     <div class="form-actions">
                         <button type="submit" id="submitBtn">Simpan Data</button>
+                        <button type="button" id="calculateBtn">Hitung Otomatis</button>
                         <button type="reset" id="resetBtn">Reset</button>
                     </div>
                 </form>
@@ -167,7 +183,9 @@
                                 <th>Harga Masuk</th>
                                 <th>Harga Keluar</th>
                                 <th>LOT</th>
-                                <th>Fee</th>
+                                <th>Fee Buy</th>
+                                <th>Fee Sell</th>
+                                <th>Total Fee</th>
                                 <th>Metode</th>
                                 <th>P/L</th>
                                 <th>Catatan</th>
@@ -180,6 +198,7 @@
                     </table>
                 </div>
             </section>
+
             <!-- Performance Section -->
             <section id="performance" class="section">
                 <h2>Analisis Performance</h2>
@@ -273,11 +292,10 @@
                     </div>
                 </div>
             </section>
-            
         </main>
     </div>
 
-        <!-- Modal untuk Edit Data -->
+    <!-- Modal untuk Edit Data -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
@@ -315,16 +333,22 @@
                     <input type="number" id="editLot" step="1" min="1" required>
                 </div>
                 
+                <!-- Kolom Fee untuk Edit -->
                 <div class="form-group">
-                    <label for="feeBuy">Fee Beli (Rp)</label>
-                    <input type="number" id="feeBuy" placeholder="Kosongkan untuk fee otomatis">
+                    <label for="editFeeBuy">Fee Beli (Rp):</label>
+                    <input type="number" id="editFeeBuy" step="0.01" placeholder="Kosongkan untuk fee otomatis">
                     <div class="fee-info">Fee otomatis: 0.1513% dari nilai beli</div>
                 </div>
                 
                 <div class="form-group">
-                    <label for="feeSell">Fee Jual (Rp)</label>
-                    <input type="number" id="feeSell" placeholder="Kosongkan untuk fee otomatis">
+                    <label for="editFeeSell">Fee Jual (Rp):</label>
+                    <input type="number" id="editFeeSell" step="0.01" placeholder="Kosongkan untuk fee otomatis">
                     <div class="fee-info">Fee otomatis: 0.25132% dari nilai jual</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editTotalFee">Total Fee (Rp):</label>
+                    <input type="number" id="editTotalFee" step="0.01" readonly>
                 </div>
                 
                 <div class="form-group">
@@ -340,11 +364,21 @@
                 
                 <div class="form-group">
                     <label for="editCatatan">Catatan:</label>
-                    <textarea id="editCatatan" rows="3" placeholder="Catatan tambahan tentang trading ini"></textarea>
+                    <textarea id="editCatatan" rows="3"></textarea>
+                </div>
+
+                <!-- Preview Profit/Loss untuk Edit -->
+                <div class="form-group">
+                    <label>Estimasi Profit/Loss:</label>
+                    <div id="editProfitLossPreview" class="profit-preview">
+                        <span id="editPlAmount">Rp 0</span>
+                        <span id="editPlPercentage">0%</span>
+                    </div>
                 </div>
                 
                 <div class="form-actions">
                     <button type="submit" id="updateBtn" class="btn-primary">Update Data</button>
+                    <button type="button" id="calculateEditBtn">Hitung Otomatis</button>
                     <button type="button" id="cancelEdit" class="btn-secondary">Batal</button>
                 </div>
             </form>
@@ -354,6 +388,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
-
-
