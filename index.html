@@ -92,9 +92,15 @@
 
                     <!-- Ubah menjadi optional dengan placeholder -->
                     <div class="form-group">
-                        <label for="feeBroker">Fee Broker (Rp):</label>
-                        <input type="number" id="feeBroker" step="100" min="0" placeholder="Kosongkan untuk pakai 0.4026%">
-                        <small class="fee-note">Biarkan kosong untuk fee otomatis 0.4026%</small>
+                        <label for="feeBuy">Fee Beli (Rp)</label>
+                        <input type="number" id="feeBuy" placeholder="Kosongkan untuk fee otomatis">
+                        <div class="fee-info">Fee otomatis: 0.1513% dari nilai beli</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="feeSell">Fee Jual (Rp)</label>
+                        <input type="number" id="feeSell" placeholder="Kosongkan untuk fee otomatis">
+                        <div class="fee-info">Fee otomatis: 0.25132% dari nilai jual</div>
                     </div>
                     
                     <div class="form-group">
@@ -310,9 +316,15 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="editFeeBroker">Fee Broker (Rp):</label>
-                    <input type="number" id="editFeeBroker" step="100" min="0" placeholder="Kosongkan untuk pakai 0.4026%">
-                    <small class="fee-note">Biarkan kosong untuk fee otomatis 0.4026%</small>
+                    <label for="feeBuy">Fee Beli (Rp)</label>
+                    <input type="number" id="feeBuy" placeholder="Kosongkan untuk fee otomatis">
+                    <div class="fee-info">Fee otomatis: 0.1513% dari nilai beli</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="feeSell">Fee Jual (Rp)</label>
+                    <input type="number" id="feeSell" placeholder="Kosongkan untuk fee otomatis">
+                    <div class="fee-info">Fee otomatis: 0.25132% dari nilai jual</div>
                 </div>
                 
                 <div class="form-group">
@@ -342,5 +354,6 @@
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
