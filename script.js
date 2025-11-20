@@ -77,8 +77,7 @@ function setupEventListeners() {
         }
     });
     
-    // Auto update fee dan profit preview
-    setupAutoCalculation();
+    
 }
 
 function showSection(sectionId) {
@@ -266,72 +265,13 @@ function setupAutoCalculation() {
     inputs.forEach(inputId => {
         const input = document.getElementById(inputId);
         if (input) {
-            input.addEventListener('input', updateProfitPreview);
-            input.addEventListener('change', updateProfitPreview);
+            
         }
     });
-    
-    // Juga untuk form edit
-    const editInputs = ['editHargaMasuk', 'editHargaKeluar', 'editLot', 'editFeeBuy', 'editFeeSell'];
-    editInputs.forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (input) {
-            input.addEventListener('input', updateEditProfitPreview);
-            input.addEventListener('change', updateEditProfitPreview);
-        }
-    });
-}
-
-// Update profit preview untuk form tambah
-function updateProfitPreview() {
-    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
-    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
-    const lot = parseInt(document.getElementById('lot').value) || 1;
-    const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
-    const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
-    
-    if (hargaMasuk > 0 && hargaKeluar > 0) {
-        const calculation = calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuy, feeSell);
-        
-        document.getElementById('plAmount').textContent = formatCurrency(calculation.profitLoss);
-        document.getElementById('plPercentage').textContent = `${calculatePercentage(hargaMasuk, hargaKeluar)}%`;
-        
-        const plElement = document.getElementById('profitLossPreview');
-        plElement.className = `profit-preview ${calculation.profitLoss >= 0 ? 'positive' : 'negative'}`;
-        
-        // Update total fee
-        document.getElementById('totalFee').value = calculation.totalFee;
-    }
-}
-
-// Update profit preview untuk form edit
-function updateEditProfitPreview() {
-    const hargaMasuk = parseFloat(document.getElementById('editHargaMasuk').value) || 0;
-    const hargaKeluar = parseFloat(document.getElementById('editHargaKeluar').value) || 0;
-    const lot = parseInt(document.getElementById('editLot').value) || 1;
-    const feeBuy = parseFloat(document.getElementById('editFeeBuy').value) || 0;
-    const feeSell = parseFloat(document.getElementById('editFeeSell').value) || 0;
-    
-    if (hargaMasuk > 0 && hargaKeluar > 0) {
-        const calculation = calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuy, feeSell);
-        
-        document.getElementById('editPlAmount').textContent = formatCurrency(calculation.profitLoss);
-        document.getElementById('editPlPercentage').textContent = `${calculatePercentage(hargaMasuk, hargaKeluar)}%`;
-        
-        const plElement = document.getElementById('editProfitLossPreview');
-        plElement.className = `profit-preview ${calculation.profitLoss >= 0 ? 'positive' : 'negative'}`;
-        
-        // Update total fee
-        document.getElementById('editTotalFee').value = calculation.totalFee;
-    }
-}
-
-// Hitung persentase profit/loss
-function calculatePercentage(hargaMasuk, hargaKeluar) {
-    return (((hargaKeluar - hargaMasuk) / hargaMasuk) * 100).toFixed(2);
 }
 
 // Tombol hitung otomatis untuk form tambah
+// ⭐⭐ UPDATE calculateAutoFeeForForm() ⭐⭐
 function calculateAutoFeeForForm() {
     const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
     const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
@@ -344,14 +284,30 @@ function calculateAutoFeeForForm() {
         document.getElementById('feeSell').value = autoFee.feeSell;
         document.getElementById('totalFee').value = autoFee.totalFee;
         
-        updateProfitPreview();
-        
         alert(`Fee otomatis telah dihitung:\nFee Beli: ${formatCurrency(autoFee.feeBuy)}\nFee Jual: ${formatCurrency(autoFee.feeSell)}\nTotal Fee: ${formatCurrency(autoFee.totalFee)}`);
     } else {
         alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
     }
 }
 
+// ⭐⭐ UPDATE calculateAutoFeeForEdit() ⭐⭐
+function calculateAutoFeeForEdit() {
+    const hargaMasuk = parseFloat(document.getElementById('editHargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('editHargaKeluar').value) || 0;
+    const lot = parseInt(document.getElementById('editLot').value) || 1;
+    
+    if (hargaMasuk > 0 && hargaKeluar > 0) {
+        const autoFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
+        
+        document.getElementById('editFeeBuy').value = autoFee.feeBuy;
+        document.getElementById('editFeeSell').value = autoFee.feeSell;
+        document.getElementById('editTotalFee').value = autoFee.totalFee;
+        
+        alert(`Fee otomatis telah dihitung:\nFee Beli: ${formatCurrency(autoFee.feeBuy)}\nFee Jual: ${formatCurrency(autoFee.feeSell)}\nTotal Fee: ${formatCurrency(autoFee.totalFee)}`);
+    } else {
+        alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
+    }
+}
 // Tombol hitung otomatis untuk form edit
 function calculateAutoFeeForEdit() {
     const hargaMasuk = parseFloat(document.getElementById('editHargaMasuk').value) || 0;
@@ -372,8 +328,7 @@ function calculateAutoFeeForEdit() {
         alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
     }
 }
-
-// Handler untuk form submission
+// ⭐⭐ UPDATE handleFormSubmit() ⭐⭐
 async function handleFormSubmit(event) {
     event.preventDefault();
     
@@ -449,15 +404,11 @@ async function handleFormSubmit(event) {
         // Reset form
         document.getElementById('tradingForm').reset();
         document.getElementById('lot').value = 1;
+        document.getElementById('totalFee').value = ''; // Reset total fee
         
         // Update tampilan
         updateHomeSummary();
         displayTradingData();
-        
-        // Reset preview
-        document.getElementById('plAmount').textContent = 'Rp 0';
-        document.getElementById('plPercentage').textContent = '0%';
-        document.getElementById('totalFee').value = '';
         
     } catch (error) {
         console.error('Error in form submission:', error);
@@ -578,7 +529,7 @@ function closeModal() {
     document.body.style.overflow = 'auto';
 }
 
-// Update handler edit form
+// ⭐⭐ UPDATE handleEditSubmit() ⭐⭐
 async function handleEditSubmit(event) {
     event.preventDefault();
     
@@ -1076,3 +1027,4 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
