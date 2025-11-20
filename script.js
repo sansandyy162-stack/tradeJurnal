@@ -1,12 +1,9 @@
 // Konfigurasi Google Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzjrJQodARnBDZ8HeVAKZNdCJ2SNL_Jz-7szHZd3D_50s6DXkcQMqW6LbMu13YhIaWB/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCfPqrevTfXAch4KogtXQGB4HssHLKanBRHPrH6G2Vl6K1gSqEOs02i/exec';
 
 // Variabel global
 let tradingData = [];
-let lineChart, pieChart, winRateChart, distributionChart; // ⭐ UPDATE INI
-let useLocalStorage = false;
-let calcCurrentMode = 'target';
-
+let lineChart, pieChart, winRateChart, distributionChart;
 
 // Inisialisasi aplikasi
 document.addEventListener('DOMContentLoaded', function() {
@@ -16,12 +13,8 @@ document.addEventListener('DOMContentLoaded', function() {
 async function initializeApp() {
     console.log('=== INITIALIZING APP ===');
     
-    // ⭐⭐ SET useLocalStorage SELALU FALSE ⭐⭐
-    useLocalStorage = false;
-    
     // Setup event listeners
     setupEventListeners();
-    
     
     console.log('Memuat data dari Google Sheets...');
     
@@ -32,7 +25,6 @@ async function initializeApp() {
         console.log('Total data:', tradingData.length);
     } catch (error) {
         console.error('❌ Gagal memuat data dari Google Sheets:', error);
-        // Biarkan tradingData sebagai array kosong
         tradingData = [];
         console.log('🔄 Menggunakan data kosong');
     }
@@ -45,18 +37,22 @@ async function initializeApp() {
     setupPerformanceTabs();
     
     console.log('=== APP INITIALIZATION COMPLETED ===');
-    console.log('Mode: Google Sheets Only (No localStorage)');
 }
+
 function setupEventListeners() {
     // Navigation
     document.getElementById('homeBtn').addEventListener('click', () => showSection('home'));
     document.getElementById('addBtn').addEventListener('click', () => showSection('add-data'));
     document.getElementById('reportBtn').addEventListener('click', () => showSection('report'));
-    
+    document.getElementById('performanceBtn').addEventListener('click', () => showSection('performance'));
     
     // Form submission
     document.getElementById('tradingForm').addEventListener('submit', handleFormSubmit);
     document.getElementById('editForm').addEventListener('submit', handleEditSubmit);
+    
+    // Tombol hitung otomatis
+    document.getElementById('calculateBtn').addEventListener('click', calculateAutoFeeForForm);
+    document.getElementById('calculateEditBtn').addEventListener('click', calculateAutoFeeForEdit);
     
     // Filters
     document.getElementById('applyFilters').addEventListener('click', applyFilters);
@@ -74,12 +70,20 @@ function setupEventListeners() {
         }
     });
     
-    // Initialize fee preview
-    setupFeePreview();
+    // ESC key untuk modal
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
+    });
+    
+    // Auto update fee dan profit preview
+    setupAutoCalculation();
 }
 
 function showSection(sectionId) {
     console.log('Showing section:', sectionId);
+    
     // Sembunyikan semua section
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
@@ -89,9 +93,6 @@ function showSection(sectionId) {
     const targetSection = document.getElementById(sectionId);
     if (targetSection) {
         targetSection.classList.add('active');
-    } else {
-        console.error('Section not found:', sectionId);
-        return;
     }
     
     // Update tombol navigasi aktif
@@ -102,18 +103,23 @@ function showSection(sectionId) {
     const btn = document.querySelector(`#${sectionId}Btn`);
     if (btn) {
         btn.classList.add('active');
-    } else {
-        console.error('Button not found for section:', sectionId);
     }
     
     // Jika pindah ke home, update summary dan chart
     if (sectionId === 'home') {
         updateHomeSummary();
     }
-     
+    // Jika pindah ke performance, load data performance
+    else if (sectionId === 'performance') {
+        setTimeout(() => {
+            displaySahamPerformance();
+            displayMetodePerformance();
+            displayTradingSummary();
+        }, 100);
+    }
 }
 
-// Fungsi untuk load data dari Google Apps Script - FIXED VERSION
+// Fungsi untuk load data dari Google Apps Script
 async function loadData() {
     try {
         console.log('🔄 Mengambil data dari Google Sheets...');
@@ -127,45 +133,35 @@ async function loadData() {
         const result = await response.json();
         console.log('📦 Response dari server:', result);
         
-        // Handle error response dari server
         if (result.error) {
             console.warn('Server returned warning:', result.error);
-            // Jangan langsung fallback, coba lanjut dengan data kosong
             tradingData = [];
-            console.log('ℹ️ Menggunakan data kosong karena server error');
             return;
         }
         
-        if (result.data && result.data.length > 1) {
-            // Konversi data dari array ke objek
-            tradingData = result.data.slice(1).map((row, index) => {
-                let feeValue = parseFloat(row[7]) || 0;
-                
-                // Handle data lama: jika nilai fee < 1, convert ke Rupiah
-                if (feeValue < 1 && feeValue > 0) {
-                    const totalShares = (parseInt(row[6]) || 1) * 100;
-                    const totalBuy = (parseFloat(row[4]) || 0) * totalShares;
-                    const totalSell = (parseFloat(row[5]) || 0) * totalShares;
-                    feeValue = (totalBuy + totalSell) * (feeValue / 100);
-                    feeValue = Math.round(feeValue);
-                }
+        if (result.data && result.data.length > 0) {
+            // Konversi data dari array ke objek - SESUAI STRUCTURE BARU
+            tradingData = result.data.map((row, index) => {
+                // Skip header row jika ada
+                if (index === 0 && row[0] === 'ID') return null;
                 
                 return {
                     id: row[0] || generateId(),
-                    tanggalMasuk: row[1] || new Date().toISOString().split('T')[0],
-                    tanggalKeluar: row[2] || new Date().toISOString().split('T')[0],
+                    tanggalMasuk: formatDateForInput(row[1]) || new Date().toISOString().split('T')[0],
+                    tanggalKeluar: formatDateForInput(row[2]) || new Date().toISOString().split('T')[0],
                     kodeSaham: row[3] || 'UNKNOWN',
                     hargaMasuk: parseFloat(row[4]) || 0,
                     hargaKeluar: parseFloat(row[5]) || 0,
                     lot: parseInt(row[6]) || 1,
-                    feeBuy: parseFloat(row[7]) || 0,        // ⭐ KOLOM BARU
-                    feeSell: parseFloat(row[8]) || 0,       // ⭐ KOLOM BARU
-                    totalFee: parseFloat(row[9]) || 0,      // ⭐ KOLOM BARU
-                    metodeTrading: row[10] || 'Scalping',   // ⭐ INDEX BERUBAH
-                    catatan: row[11] || '',                 // ⭐ INDEX BERUBAH
-                    profitLoss: parseFloat(row[12]) || 0    // ⭐ INDEX BERUBAH
+                    feeBuy: parseFloat(row[7]) || 0,
+                    feeSell: parseFloat(row[8]) || 0,
+                    totalFee: parseFloat(row[9]) || 0,
+                    profitLoss: parseFloat(row[10]) || 0,
+                    metodeTrading: row[11] || 'Scalping',
+                    catatan: row[12] || ''
                 };
-            });
+            }).filter(item => item !== null); // Hapus null values
+            
             console.log(`✅ Load ${tradingData.length} records berhasil dari Google Sheets`);
         } else {
             tradingData = [];
@@ -173,81 +169,52 @@ async function loadData() {
         }
     } catch (error) {
         console.error('❌ Error loading data from server:', error);
-        // Jangan fallback ke localStorage, biarkan array kosong
-        tradingData = [];
-        console.log('🔄 Menggunakan data kosong, tetap coba simpan ke Google Sheets');
-    }
-}
-
-// ⭐⭐ COMMENT atau HAPUS fungsi localStorage ⭐⭐
-/*
-function loadFromLocalStorage() {
-    const savedData = localStorage.getItem('tradingData');
-    if (savedData) {
-        tradingData = JSON.parse(savedData);
-    } else {
         tradingData = [];
     }
 }
-*/
 
-// Fungsi untuk save data ke Google Apps Script - FIXED VERSION (NO LOCALSTORAGE)
+// Fungsi untuk save data ke Google Apps Script
 async function saveData() {
     console.log('💾 Menyimpan data ke Google Sheets...');
-    console.log('Data to save:', tradingData);
-    
-    // ⭐⭐ HAPUS localStorage fallback ⭐⭐
-    // SELALU coba simpan ke Google Sheets, bahkan jika sebelumnya error
     
     try {
-        console.log('🔄 Mengirim data ke Google Apps Script...');
-        
-        // Kirim semua data ke server
-        const params = new URLSearchParams({
-            action: 'saveAllData',
-            data: JSON.stringify(tradingData)
-        });
-        
-        console.log('Mengirim request ke:', APPS_SCRIPT_URL);
-        
         const response = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
-            body: params
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'saveAllData',
+                jsonData: JSON.stringify(tradingData)
+            })
         });
-        
-        console.log('Response status:', response.status);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const result = await response.json();
-        console.log('Response dari Google Sheets:', result);
         
-        // Handle error response
         if (result.error) {
             throw new Error(`Google Sheets error: ${result.error}`);
         }
         
-        console.log('✅ Data berhasil disimpan ke Google Sheets:', result);
-        return true; // Return success
+        console.log('✅ Data berhasil disimpan ke Google Sheets');
+        return true;
         
     } catch (error) {
         console.error('❌ Gagal menyimpan ke Google Sheets:', error);
-        
-        // ⭐⭐ TIDAK fallback ke localStorage ⭐⭐
-        // Biarkan error, user akan tahu ada masalah dengan Google Sheets
-        alert('❌ Gagal menyimpan data ke Google Sheets!\n\nError: ' + error.message + '\n\nCoba refresh halaman dan coba lagi.');
-        return false; // Return failure
+        alert('❌ Gagal menyimpan data ke Google Sheets!\n\nError: ' + error.message);
+        return false;
     }
 }
 
 // Fungsi untuk generate ID unik
 function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return 'TRX-' + Date.now();
 }
 
-// Fungsi untuk menghitung fee otomatis berdasarkan persentase 0.4026%
+// Fungsi untuk menghitung fee otomatis
 function calculateAutoFee(hargaMasuk, hargaKeluar, lot) {
     const totalShares = lot * 100;
     const totalBuy = hargaMasuk * totalShares;
@@ -263,43 +230,154 @@ function calculateAutoFee(hargaMasuk, hargaKeluar, lot) {
     };
 }
 
-function calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuyInput, feeSellInput) {
+// Fungsi untuk menghitung profit/loss
+function calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuy, feeSell) {
     const totalShares = lot * 100;
     const totalBuy = hargaMasuk * totalShares;
     const totalSell = hargaKeluar * totalShares;
     
-    let feeBuy, feeSell;
+    let finalFeeBuy = feeBuy;
+    let finalFeeSell = feeSell;
     
-    // Jika user input fee manual
-    if (feeBuyInput !== null && feeBuyInput !== '' && !isNaN(feeBuyInput) && 
-        feeSellInput !== null && feeSellInput !== '' && !isNaN(feeSellInput)) {
-        feeBuy = parseFloat(feeBuyInput);
-        feeSell = parseFloat(feeSellInput);
-    } else {
-        // Fee otomatis terpisah
-        feeBuy = Math.round(totalBuy * (0.1513 / 100));
-        feeSell = Math.round(totalSell * (0.25132 / 100));
+    // Jika fee kosong, hitung otomatis
+    if (!feeBuy || feeBuy === 0 || !feeSell || feeSell === 0) {
+        const autoFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
+        finalFeeBuy = autoFee.feeBuy;
+        finalFeeSell = autoFee.feeSell;
     }
     
-    const totalFee = feeBuy + feeSell;
+    const totalFee = finalFeeBuy + finalFeeSell;
     const profitLoss = totalSell - totalBuy - totalFee;
     
     return {
-        profitLoss: Math.round(profitLoss * 100) / 100,
+        profitLoss: Math.round(profitLoss),
         totalFee: totalFee,
-        feeBuy: feeBuy,
-        feeSell: feeSell,
+        feeBuy: finalFeeBuy,
+        feeSell: finalFeeSell,
         totalBuy: totalBuy,
         totalSell: totalSell
     };
 }
 
-// Handler untuk form submission - FIXED VERSION (NO LOCALSTORAGE)
+// Setup auto calculation untuk form
+function setupAutoCalculation() {
+    const inputs = ['hargaMasuk', 'hargaKeluar', 'lot', 'feeBuy', 'feeSell'];
+    
+    inputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('input', updateProfitPreview);
+            input.addEventListener('change', updateProfitPreview);
+        }
+    });
+    
+    // Juga untuk form edit
+    const editInputs = ['editHargaMasuk', 'editHargaKeluar', 'editLot', 'editFeeBuy', 'editFeeSell'];
+    editInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('input', updateEditProfitPreview);
+            input.addEventListener('change', updateEditProfitPreview);
+        }
+    });
+}
+
+// Update profit preview untuk form tambah
+function updateProfitPreview() {
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+    const lot = parseInt(document.getElementById('lot').value) || 1;
+    const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+    const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+    
+    if (hargaMasuk > 0 && hargaKeluar > 0) {
+        const calculation = calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuy, feeSell);
+        
+        document.getElementById('plAmount').textContent = formatCurrency(calculation.profitLoss);
+        document.getElementById('plPercentage').textContent = `${calculatePercentage(hargaMasuk, hargaKeluar)}%`;
+        
+        const plElement = document.getElementById('profitLossPreview');
+        plElement.className = `profit-preview ${calculation.profitLoss >= 0 ? 'positive' : 'negative'}`;
+        
+        // Update total fee
+        document.getElementById('totalFee').value = calculation.totalFee;
+    }
+}
+
+// Update profit preview untuk form edit
+function updateEditProfitPreview() {
+    const hargaMasuk = parseFloat(document.getElementById('editHargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('editHargaKeluar').value) || 0;
+    const lot = parseInt(document.getElementById('editLot').value) || 1;
+    const feeBuy = parseFloat(document.getElementById('editFeeBuy').value) || 0;
+    const feeSell = parseFloat(document.getElementById('editFeeSell').value) || 0;
+    
+    if (hargaMasuk > 0 && hargaKeluar > 0) {
+        const calculation = calculateProfitLoss(hargaMasuk, hargaKeluar, lot, feeBuy, feeSell);
+        
+        document.getElementById('editPlAmount').textContent = formatCurrency(calculation.profitLoss);
+        document.getElementById('editPlPercentage').textContent = `${calculatePercentage(hargaMasuk, hargaKeluar)}%`;
+        
+        const plElement = document.getElementById('editProfitLossPreview');
+        plElement.className = `profit-preview ${calculation.profitLoss >= 0 ? 'positive' : 'negative'}`;
+        
+        // Update total fee
+        document.getElementById('editTotalFee').value = calculation.totalFee;
+    }
+}
+
+// Hitung persentase profit/loss
+function calculatePercentage(hargaMasuk, hargaKeluar) {
+    return (((hargaKeluar - hargaMasuk) / hargaMasuk) * 100).toFixed(2);
+}
+
+// Tombol hitung otomatis untuk form tambah
+function calculateAutoFeeForForm() {
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+    const lot = parseInt(document.getElementById('lot').value) || 1;
+    
+    if (hargaMasuk > 0 && hargaKeluar > 0) {
+        const autoFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
+        
+        document.getElementById('feeBuy').value = autoFee.feeBuy;
+        document.getElementById('feeSell').value = autoFee.feeSell;
+        document.getElementById('totalFee').value = autoFee.totalFee;
+        
+        updateProfitPreview();
+        
+        alert(`Fee otomatis telah dihitung:\nFee Beli: ${formatCurrency(autoFee.feeBuy)}\nFee Jual: ${formatCurrency(autoFee.feeSell)}\nTotal Fee: ${formatCurrency(autoFee.totalFee)}`);
+    } else {
+        alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
+    }
+}
+
+// Tombol hitung otomatis untuk form edit
+function calculateAutoFeeForEdit() {
+    const hargaMasuk = parseFloat(document.getElementById('editHargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('editHargaKeluar').value) || 0;
+    const lot = parseInt(document.getElementById('editLot').value) || 1;
+    
+    if (hargaMasuk > 0 && hargaKeluar > 0) {
+        const autoFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
+        
+        document.getElementById('editFeeBuy').value = autoFee.feeBuy;
+        document.getElementById('editFeeSell').value = autoFee.feeSell;
+        document.getElementById('editTotalFee').value = autoFee.totalFee;
+        
+        updateEditProfitPreview();
+        
+        alert(`Fee otomatis telah dihitung:\nFee Beli: ${formatCurrency(autoFee.feeBuy)}\nFee Jual: ${formatCurrency(autoFee.feeSell)}\nTotal Fee: ${formatCurrency(autoFee.totalFee)}`);
+    } else {
+        alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
+    }
+}
+
+// Handler untuk form submission
 async function handleFormSubmit(event) {
-    console.log('Form submission started...');
     event.preventDefault();
     
-    // Validasi form dulu sebelum proses
+    // Validasi form
     const tanggalMasuk = document.getElementById('tanggalMasuk').value;
     const tanggalKeluar = document.getElementById('tanggalKeluar').value;
     const kodeSaham = document.getElementById('kodeSaham').value;
@@ -307,7 +385,6 @@ async function handleFormSubmit(event) {
     const hargaKeluar = document.getElementById('hargaKeluar').value;
     const lot = document.getElementById('lot').value;
     
-    // Validasi required fields
     if (!tanggalMasuk || !tanggalKeluar || !kodeSaham || !hargaMasuk || !hargaKeluar || !lot) {
         alert('Harap isi semua field yang wajib!');
         return;
@@ -325,6 +402,18 @@ async function handleFormSubmit(event) {
     
     try {
         // Ambil nilai dari form
+        const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+        const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+        
+        // Hitung profit/loss
+        const calculation = calculateProfitLoss(
+            parseFloat(hargaMasuk),
+            parseFloat(hargaKeluar),
+            parseInt(lot),
+            feeBuy,
+            feeSell
+        );
+        
         const formData = {
             id: generateId(),
             tanggalMasuk: tanggalMasuk,
@@ -333,44 +422,26 @@ async function handleFormSubmit(event) {
             hargaMasuk: parseFloat(hargaMasuk),
             hargaKeluar: parseFloat(hargaKeluar),
             lot: parseInt(lot),
-            feeBroker: document.getElementById('feeBroker').value,
+            feeBuy: calculation.feeBuy,
+            feeSell: calculation.feeSell,
+            totalFee: calculation.totalFee,
+            profitLoss: calculation.profitLoss,
             metodeTrading: document.getElementById('metodeTrading').value,
             catatan: document.getElementById('catatan').value
         };
-        
-        console.log('Form data collected:', formData);
-        
-        // Hitung profit/loss
-        const calculation = calculateProfitLoss(
-            formData.hargaMasuk, 
-            formData.hargaKeluar, 
-            formData.lot,
-            formData.feeBroker
-        );
-        
-        formData.feeBuy = calculation.feeBuy;        // ⭐ SIMPAN FEE TERPISAH
-        formData.feeSell = calculation.feeSell;      // ⭐ SIMPAN FEE TERPISAH  
-        formData.totalFee = calculation.totalFee;    // ⭐ SIMPAN TOTAL FEE
-        formData.profitLoss = calculation.profitLoss;
         
         console.log('Final data to save:', formData);
         
         // Tambahkan ke array data
         tradingData.push(formData);
-        console.log('Data added to tradingData array');
         
-        // ⭐⭐ SIMPAN KE GOOGLE SHEETS - TANPA FALLBACK ⭐⭐
-        console.log('Menyimpan ke Google Sheets...');
+        // Simpan ke Google Sheets
         const saveResult = await saveData();
         
         if (!saveResult) {
-            // Jika save gagal, hapus data dari array
             tradingData = tradingData.filter(item => item.id !== formData.id);
-            console.log('Data removed from array karena save gagal');
-            return; // Berhenti di sini
+            return;
         }
-        
-        console.log('Data saved successfully to Google Sheets');
         
         // Tampilkan notifikasi sukses
         alert(`✅ Data trading berhasil disimpan ke Google Sheets!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`);
@@ -378,15 +449,15 @@ async function handleFormSubmit(event) {
         // Reset form
         document.getElementById('tradingForm').reset();
         document.getElementById('lot').value = 1;
-        console.log('Form reset completed');
         
         // Update tampilan
         updateHomeSummary();
         displayTradingData();
         
-        // TETAP di section add-data
-        showSection('add-data');
-        console.log('Stay in add-data section');
+        // Reset preview
+        document.getElementById('plAmount').textContent = 'Rp 0';
+        document.getElementById('plPercentage').textContent = '0%';
+        document.getElementById('totalFee').value = '';
         
     } catch (error) {
         console.error('Error in form submission:', error);
@@ -394,52 +465,232 @@ async function handleFormSubmit(event) {
     }
 }
 
-// Fungsi untuk menampilkan preview fee otomatis
-function setupFeePreview() {
-    const hargaMasukInput = document.getElementById('hargaMasuk');
-    const hargaKeluarInput = document.getElementById('hargaKeluar');
-    const lotInput = document.getElementById('lot');
-    const feeBrokerInput = document.getElementById('feeBroker');
+// Format currency (Rupiah)
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+    }).format(amount);
+}
+
+// Format date untuk input
+function formatDateForInput(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+}
+
+// Format date untuk display
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('id-ID');
+}
+
+// Tampilkan data di report
+function displayTradingData(filteredData = null) {
+    const dataToDisplay = filteredData || tradingData;
+    const tableBody = document.getElementById('tradingTableBody');
     
-    // Buat element preview jika belum ada
-    if (!document.getElementById('feePreview')) {
-        const previewDiv = document.createElement('div');
-        previewDiv.id = 'feePreview';
-        previewDiv.className = 'auto-fee-info';
-        previewDiv.style.display = 'none';
-        feeBrokerInput.parentNode.appendChild(previewDiv);
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    if (dataToDisplay.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="13" style="text-align: center;">Tidak ada data trading</td></tr>';
+        return;
     }
     
-    function updateFeePreview() {
-        const hargaMasuk = parseFloat(hargaMasukInput.value) || 0;
-        const hargaKeluar = parseFloat(hargaKeluarInput.value) || 0;
-        const lot = parseInt(lotInput.value) || 1;
-        const currentFeeBuy = feeBuyInput.value;
-        const currentFeeSell = feeSellInput.value;
+    dataToDisplay.forEach(item => {
+        const row = document.createElement('tr');
         
-        const previewElement = document.getElementById('feePreview');
+        row.innerHTML = `
+            <td>${formatDate(item.tanggalMasuk)}</td>
+            <td>${formatDate(item.tanggalKeluar)}</td>
+            <td>${item.kodeSaham}</td>
+            <td>${formatCurrency(item.hargaMasuk)}</td>
+            <td>${formatCurrency(item.hargaKeluar)}</td>
+            <td>${item.lot}</td>
+            <td>${formatCurrency(item.feeBuy)}</td>
+            <td>${formatCurrency(item.feeSell)}</td>
+            <td>${formatCurrency(item.totalFee)}</td>
+            <td>${item.metodeTrading}</td>
+            <td class="${item.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(item.profitLoss)}</td>
+            <td>${item.catatan || '-'}</td>
+            <td>
+                <button class="action-btn edit-btn" data-id="${item.id}">Edit</button>
+                <button class="action-btn delete-btn" data-id="${item.id}">Hapus</button>
+            </td>
+        `;
         
-        // Jika field fee kosong dan harga sudah diisi, tampilkan preview
-        if ((!currentFeeBuy || !currentFeeSell) && hargaMasuk > 0 && hargaKeluar > 0) {
-            const autoFee = calculateAutoFee(hargaMasuk, hargaKeluar, lot);
-            previewElement.innerHTML = `
-                <strong>Fee Otomatis:</strong><br>
-                • Fee Beli: ${formatCurrency(autoFee.feeBuy)} (0.1513% dari nilai beli)<br>
-                • Fee Jual: ${formatCurrency(autoFee.feeSell)} (0.25132% dari nilai jual)<br>
-                • Total Fee: ${formatCurrency(autoFee.totalFee)}
-                <br><small>Isi manual jika ingin mengubah</small>
-            `;
-            previewElement.style.display = 'block';
-        } else {
-            previewElement.style.display = 'none';
-        }
-    }
-    
-    // Event listeners untuk update preview
-    [hargaMasukInput, hargaKeluarInput, lotInput, feeBrokerInput].forEach(input => {
-        input.addEventListener('input', updateFeePreview);
-        input.addEventListener('change', updateFeePreview);
+        tableBody.appendChild(row);
     });
+    
+    // Event listeners untuk tombol edit dan hapus
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.getAttribute('data-id');
+            openEditModal(id);
+        });
+    });
+    
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.getAttribute('data-id');
+            deleteTradingData(id);
+        });
+    });
+}
+
+// Modal functions
+function openEditModal(id) {
+    const data = tradingData.find(item => item.id === id);
+    
+    if (!data) return;
+    
+    // Isi form dengan data
+    document.getElementById('editId').value = data.id;
+    document.getElementById('editTanggalMasuk').value = data.tanggalMasuk;
+    document.getElementById('editTanggalKeluar').value = data.tanggalKeluar;
+    document.getElementById('editKodeSaham').value = data.kodeSaham;
+    document.getElementById('editHargaMasuk').value = data.hargaMasuk;
+    document.getElementById('editHargaKeluar').value = data.hargaKeluar;
+    document.getElementById('editLot').value = data.lot;
+    document.getElementById('editFeeBuy').value = data.feeBuy;
+    document.getElementById('editFeeSell').value = data.feeSell;
+    document.getElementById('editTotalFee').value = data.totalFee;
+    document.getElementById('editMetodeTrading').value = data.metodeTrading;
+    document.getElementById('editCatatan').value = data.catatan || '';
+    
+    // Update profit preview
+    updateEditProfitPreview();
+    
+    // Tampilkan modal
+    const modal = document.getElementById('editModal');
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    const modal = document.getElementById('editModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Update handler edit form
+async function handleEditSubmit(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('editId').value;
+    const index = tradingData.findIndex(item => item.id === id);
+    
+    if (index === -1) return;
+    
+    // Validasi data
+    const tanggalKeluar = document.getElementById('editTanggalKeluar').value;
+    const tanggalMasuk = document.getElementById('editTanggalMasuk').value;
+    
+    if (tanggalKeluar < tanggalMasuk) {
+        alert('Tanggal keluar tidak boleh sebelum tanggal masuk!');
+        return;
+    }
+    
+    const lot = parseInt(document.getElementById('editLot').value);
+    if (lot < 1) {
+        alert('Jumlah LOT minimal 1!');
+        return;
+    }
+    
+    // Ambil nilai fee
+    const feeBuy = parseFloat(document.getElementById('editFeeBuy').value) || 0;
+    const feeSell = parseFloat(document.getElementById('editFeeSell').value) || 0;
+    
+    // Hitung profit/loss
+    const calculation = calculateProfitLoss(
+        parseFloat(document.getElementById('editHargaMasuk').value),
+        parseFloat(document.getElementById('editHargaKeluar').value),
+        lot,
+        feeBuy,
+        feeSell
+    );
+    
+    // Update data
+    tradingData[index] = {
+        id: id,
+        tanggalMasuk: tanggalMasuk,
+        tanggalKeluar: tanggalKeluar,
+        kodeSaham: document.getElementById('editKodeSaham').value.toUpperCase(),
+        hargaMasuk: parseFloat(document.getElementById('editHargaMasuk').value),
+        hargaKeluar: parseFloat(document.getElementById('editHargaKeluar').value),
+        lot: lot,
+        feeBuy: calculation.feeBuy,
+        feeSell: calculation.feeSell,
+        totalFee: calculation.totalFee,
+        profitLoss: calculation.profitLoss,
+        metodeTrading: document.getElementById('editMetodeTrading').value,
+        catatan: document.getElementById('editCatatan').value
+    };
+    
+    // Simpan perubahan
+    await saveData();
+    
+    // Tutup modal
+    closeModal();
+    
+    // Update tampilan
+    updateHomeSummary();
+    displayTradingData();
+    
+    alert('Data trading berhasil diupdate!');
+}
+
+// Hapus data trading
+async function deleteTradingData(id) {
+    if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) {
+        return;
+    }
+    
+    tradingData = tradingData.filter(item => item.id !== id);
+    
+    // Simpan perubahan
+    await saveData();
+    
+    // Update tampilan
+    updateHomeSummary();
+    displayTradingData();
+    
+    alert('Data trading berhasil dihapus!');
+}
+
+// Filter data
+function applyFilters() {
+    const metode = document.getElementById('filterMetode').value;
+    const bulan = document.getElementById('filterBulan').value;
+    const saham = document.getElementById('filterSaham').value.toUpperCase();
+    
+    let filteredData = tradingData;
+    
+    if (metode) {
+        filteredData = filteredData.filter(item => item.metodeTrading === metode);
+    }
+    
+    if (bulan) {
+        filteredData = filteredData.filter(item => item.tanggalMasuk.startsWith(bulan));
+    }
+    
+    if (saham) {
+        filteredData = filteredData.filter(item => item.kodeSaham.includes(saham));
+    }
+    
+    displayTradingData(filteredData);
+}
+
+function resetFilters() {
+    document.getElementById('filterMetode').value = '';
+    document.getElementById('filterBulan').value = '';
+    document.getElementById('filterSaham').value = '';
+    displayTradingData();
 }
 
 // Update summary di home
@@ -450,7 +701,6 @@ function updateHomeSummary() {
     const maxProfitElement = document.getElementById('maxProfit');
     
     if (!totalPLElement || !winRateElement || !totalTradesElement || !maxProfitElement) {
-        console.error('Summary elements not found');
         return;
     }
     
@@ -460,11 +710,9 @@ function updateHomeSummary() {
         totalTradesElement.textContent = '0';
         maxProfitElement.textContent = 'Rp 0';
         
-        // Reset class
         totalPLElement.className = 'pl-value';
         maxProfitElement.className = 'pl-value';
         
-        // Reset chart jika ada
         if (lineChart) lineChart.destroy();
         if (pieChart) pieChart.destroy();
         return;
@@ -492,22 +740,13 @@ function updateHomeSummary() {
     updateCharts();
 }
 
-// Format currency (Rupiah)
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        minimumFractionDigits: 0
-    }).format(amount);
-}
-
-// Update chart
+// Update chart (sama seperti sebelumnya)
 function updateCharts() {
     // Line chart - Profit/Loss per bulan
     const monthlyData = {};
     
     tradingData.forEach(item => {
-        const month = item.tanggalMasuk.substring(0, 7); // Format YYYY-MM
+        const month = item.tanggalMasuk.substring(0, 7);
         if (!monthlyData[month]) {
             monthlyData[month] = 0;
         }
@@ -596,239 +835,7 @@ function updateCharts() {
     });
 }
 
-// Tampilkan data di report - VERSI SIMPLE
-function displayTradingData(filteredData = null) {
-    const dataToDisplay = filteredData || tradingData;
-    const tableBody = document.getElementById('tradingTableBody');
-    
-    if (!tableBody) return;
-    
-    tableBody.innerHTML = '';
-    
-    if (dataToDisplay.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Tidak ada data trading</td></tr>';
-        return;
-    }
-    
-    dataToDisplay.forEach(item => {
-        const row = document.createElement('tr');
-        
-        // ⭐⭐ SIMPLE: Selalu tampilkan nilai RUPIAH
-        row.innerHTML = `
-            <td>${formatDate(item.tanggalMasuk)}</td>
-            <td>${formatDate(item.tanggalKeluar)}</td>
-            <td>${item.kodeSaham}</td>
-            <td>${formatCurrency(item.hargaMasuk)}</td>
-            <td>${formatCurrency(item.hargaKeluar)}</td>
-            <td>${item.lot}</td>
-            <td>${formatCurrency(item.feeBroker)}</td> <!-- ⭐ Nilai Rupiah -->
-            <td>${item.metodeTrading}</td>
-            <td class="${item.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(item.profitLoss)}</td>
-            <td>${item.catatan || '-'}</td>
-            <td>
-                <button class="action-btn edit-btn" data-id="${item.id}">Edit</button>
-                <button class="action-btn delete-btn" data-id="${item.id}">Hapus</button>
-            </td>
-        `;
-        
-        tableBody.appendChild(row);
-    });
-    
-    // Event listeners untuk tombol edit dan hapus
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const id = e.target.getAttribute('data-id');
-            openEditModal(id);
-        });
-    });
-    
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const id = e.target.getAttribute('data-id');
-            deleteTradingData(id);
-        });
-    });
-}
-
-// Format tanggal
-function formatDate(dateString) {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('id-ID');
-}
-
-// Filter data
-function applyFilters() {
-    const metode = document.getElementById('filterMetode').value;
-    const bulan = document.getElementById('filterBulan').value;
-    const saham = document.getElementById('filterSaham').value.toUpperCase();
-    
-    let filteredData = tradingData;
-    
-    if (metode) {
-        filteredData = filteredData.filter(item => item.metodeTrading === metode);
-    }
-    
-    if (bulan) {
-        filteredData = filteredData.filter(item => item.tanggalMasuk.startsWith(bulan));
-    }
-    
-    if (saham) {
-        filteredData = filteredData.filter(item => item.kodeSaham.includes(saham));
-    }
-    
-    displayTradingData(filteredData);
-}
-
-function resetFilters() {
-    document.getElementById('filterMetode').value = '';
-    document.getElementById('filterBulan').value = '';
-    document.getElementById('filterSaham').value = '';
-    
-    displayTradingData();
-}
-
-// Modal functions
-// Modal functions - VERSI SIMPLE
-function openEditModal(id) {
-    const data = tradingData.find(item => item.id === id);
-    
-    if (!data) return;
-    
-    // Isi form dengan data
-    document.getElementById('editId').value = data.id;
-    document.getElementById('editTanggalMasuk').value = data.tanggalMasuk;
-    document.getElementById('editTanggalKeluar').value = data.tanggalKeluar;
-    document.getElementById('editKodeSaham').value = data.kodeSaham;
-    document.getElementById('editHargaMasuk').value = data.hargaMasuk;
-    document.getElementById('editHargaKeluar').value = data.hargaKeluar;
-    document.getElementById('editLot').value = data.lot;
-    document.getElementById('editFeeBroker').value = data.feeBroker;
-    document.getElementById('editMetodeTrading').value = data.metodeTrading;
-    document.getElementById('editCatatan').value = data.catatan || '';
-    
-    // Tampilkan modal
-    const modal = document.getElementById('editModal');
-    modal.style.display = 'block';
-    
-    // Scroll ke atas modal ketika dibuka
-    const modalContent = modal.querySelector('.modal-content');
-    modalContent.scrollTop = 0;
-    
-    // Prevent body scroll ketika modal terbuka
-    document.body.style.overflow = 'hidden';
-}
-
-function closeModal() {
-    const modal = document.getElementById('editModal');
-    modal.style.display = 'none';
-    
-    // Kembalikan body scroll
-    document.body.style.overflow = 'auto';
-}
-
-// Update handler edit form - VERSI SIMPLE
-async function handleEditSubmit(event) {
-    event.preventDefault();
-    
-    const id = document.getElementById('editId').value;
-    const index = tradingData.findIndex(item => item.id === id);
-    
-    if (index === -1) return;
-    
-    // Validasi data
-    const tanggalKeluar = document.getElementById('editTanggalKeluar').value;
-    const tanggalMasuk = document.getElementById('editTanggalMasuk').value;
-    
-    if (tanggalKeluar < tanggalMasuk) {
-        alert('Tanggal keluar tidak boleh sebelum tanggal masuk!');
-        return;
-    }
-    
-    const lot = parseInt(document.getElementById('editLot').value);
-    if (lot < 1) {
-        alert('Jumlah LOT minimal 1!');
-        return;
-    }
-    
-    // Ambil nilai fee
-    const feeBrokerInput = document.getElementById('editFeeBroker').value;
-    
-    // Hitung profit/loss
-    const calculation = calculateProfitLoss(
-        parseFloat(document.getElementById('editHargaMasuk').value),
-        parseFloat(document.getElementById('editHargaKeluar').value),
-        lot,
-        feeBrokerInput
-    );
-    
-    // ⭐⭐ SIMPLE: Selalu simpan nilai RUPIAH di database
-    tradingData[index] = {
-        id: id,
-        tanggalMasuk: tanggalMasuk,
-        tanggalKeluar: tanggalKeluar,
-        kodeSaham: document.getElementById('editKodeSaham').value.toUpperCase(),
-        hargaMasuk: parseFloat(document.getElementById('editHargaMasuk').value),
-        hargaKeluar: parseFloat(document.getElementById('editHargaKeluar').value),
-        lot: lot,
-        feeBroker: calculation.totalFee, // ⭐ Simpan nilai RUPIAH
-        metodeTrading: document.getElementById('editMetodeTrading').value,
-        catatan: document.getElementById('editCatatan').value,
-        profitLoss: calculation.profitLoss
-    };
-    
-    // Simpan perubahan
-    await saveData();
-    
-    // Tutup modal
-    closeModal();
-    
-    // Update tampilan
-    updateHomeSummary();
-    displayTradingData();
-    
-    // Tampilkan notifikasi
-    alert(`Data trading berhasil diupdate!\n\nFee: ${formatCurrency(calculation.totalFee)}\nProfit/Loss: ${formatCurrency(calculation.profitLoss)}`);
-}
-
-// Hapus data trading
-async function deleteTradingData(id) {
-    if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) {
-        return;
-    }
-    
-    tradingData = tradingData.filter(item => item.id !== id);
-    
-    // Simpan perubahan
-    await saveData();
-    
-    // Update tampilan
-    updateHomeSummary();
-    displayTradingData();
-    
-    // Tampilkan notifikasi
-    alert('Data trading berhasil dihapus!');
-}
-
-// ⭐⭐⭐ PASTE KODE DI SINI ⭐⭐⭐
-// Event listener untuk ESC key
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        closeModal();
-    }
-});
-
-// Auto-focus ke field pertama ketika modal terbuka
-document.getElementById('editModal').addEventListener('shown', function() {
-    const firstInput = this.querySelector('input, select, textarea');
-    if (firstInput) {
-        firstInput.focus();
-    }
-});
-// ⭐⭐⭐ SAMPAI DI SINI ⭐⭐⭐
-
-
-// Fungsi untuk analisis performance by saham
+// Fungsi untuk performance analysis (sama seperti sebelumnya)
 function analyzeSahamPerformance() {
     const sahamData = {};
     
@@ -858,7 +865,6 @@ function analyzeSahamPerformance() {
     return sahamData;
 }
 
-// Fungsi untuk analisis performance by metode
 function analyzeMetodePerformance() {
     const metodeData = {};
     
@@ -888,10 +894,11 @@ function analyzeMetodePerformance() {
     return metodeData;
 }
 
-// Tampilkan performance by saham
 function displaySahamPerformance() {
     const sahamData = analyzeSahamPerformance();
     const tbody = document.getElementById('sahamPerformanceBody');
+    
+    if (!tbody) return;
     
     tbody.innerHTML = '';
     
@@ -918,10 +925,11 @@ function displaySahamPerformance() {
     });
 }
 
-// Tampilkan performance by metode
 function displayMetodePerformance() {
     const metodeData = analyzeMetodePerformance();
     const tbody = document.getElementById('metodePerformanceBody');
+    
+    if (!tbody) return;
     
     tbody.innerHTML = '';
     
@@ -946,7 +954,6 @@ function displayMetodePerformance() {
     });
 }
 
-// Tampilkan summary trading
 function displayTradingSummary() {
     const totalTrades = tradingData.length;
     const wins = tradingData.filter(t => t.profitLoss > 0).length;
@@ -961,18 +968,13 @@ function displayTradingSummary() {
     updatePerformanceCharts();
 }
 
-// Update performance charts
-// Perbaiki fungsi updatePerformanceCharts
 function updatePerformanceCharts() {
     const metodeData = analyzeMetodePerformance();
     
-    // Win Rate Chart - FIXED VERSION
+    // Win Rate Chart
     const winRateCtx = document.getElementById('winRateChart');
     if (winRateCtx) {
-        // Destroy chart sebelumnya jika ada
-        if (winRateChart) {
-            winRateChart.destroy();
-        }
+        if (winRateChart) winRateChart.destroy();
         
         const methods = Object.keys(metodeData);
         const winRates = methods.map(method => {
@@ -980,7 +982,7 @@ function updatePerformanceCharts() {
             return data.totalTrades > 0 ? (data.wins / data.totalTrades * 100) : 0;
         });
         
-        winRateChart = new Chart(winRateCtx.getContext('2d'), { // ⭐ SIMPAN KE VARIABLE
+        winRateChart = new Chart(winRateCtx.getContext('2d'), {
             type: 'bar',
             data: {
                 labels: methods,
@@ -1002,13 +1004,10 @@ function updatePerformanceCharts() {
         });
     }
     
-    // Distribution Chart - FIXED VERSION
+    // Distribution Chart
     const distributionCtx = document.getElementById('distributionChart');
     if (distributionCtx) {
-        // Destroy chart sebelumnya jika ada
-        if (distributionChart) {
-            distributionChart.destroy();
-        }
+        if (distributionChart) distributionChart.destroy();
         
         const profitRanges = {
             'Loss Besar (< -1M)': 0,
@@ -1029,7 +1028,7 @@ function updatePerformanceCharts() {
             else profitRanges['Profit Besar (> 1M)']++;
         });
         
-        distributionChart = new Chart(distributionCtx.getContext('2d'), { // ⭐ SIMPAN KE VARIABLE
+        distributionChart = new Chart(distributionCtx.getContext('2d'), {
             type: 'pie',
             data: {
                 labels: Object.keys(profitRanges),
@@ -1048,7 +1047,6 @@ function updatePerformanceCharts() {
     }
 }
 
-// Performance tab functionality - FIXED VERSION
 function setupPerformanceTabs() {
     const tabs = document.querySelectorAll('.perf-tab');
     const tabContents = document.querySelectorAll('.perf-tab-content');
@@ -1056,9 +1054,7 @@ function setupPerformanceTabs() {
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const tabName = tab.getAttribute('data-tab');
-            console.log('Performance tab clicked:', tabName);
             
-            // Update active tab
             tabs.forEach(t => t.classList.remove('active'));
             tabContents.forEach(tc => tc.classList.remove('active'));
             
@@ -1068,7 +1064,6 @@ function setupPerformanceTabs() {
                 targetTab.classList.add('active');
             }
             
-            // Refresh data berdasarkan tab
             if (tabName === 'saham') {
                 displaySahamPerformance();
             } else if (tabName === 'metode') {
@@ -1079,140 +1074,5 @@ function setupPerformanceTabs() {
         });
     });
     
-    // Load data untuk tab pertama
     displaySahamPerformance();
 }
-
-// Update showSection untuk performance - FIXED VERSION
-function showSection(sectionId) {
-    console.log('Showing section:', sectionId);
-    
-    // Sembunyikan semua section
-    document.querySelectorAll('.section').forEach(section => {
-        section.classList.remove('active');
-    });
-    
-    // Tampilkan section yang dipilih
-    const targetSection = document.getElementById(sectionId);
-    if (targetSection) {
-        targetSection.classList.add('active');
-    }
-    
-    // Update tombol navigasi aktif
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    const btn = document.querySelector(`#${sectionId}Btn`);
-    if (btn) btn.classList.add('active');
-    
-    // Jika pindah ke home, update summary dan chart
-    if (sectionId === 'home') {
-        updateHomeSummary();
-    }
-    // Jika pindah ke performance, load data performance
-    else if (sectionId === 'performance') {
-        // Pastikan performance tabs sudah setup
-        setTimeout(() => {
-            displaySahamPerformance();
-            displayMetodePerformance();
-            displayTradingSummary();
-        }, 100);
-    }
-}
-
-// Update navigation untuk performance
-function setupEventListeners() {
-    console.log('Setting up event listeners...');
-    
-    // Navigation
-    document.getElementById('homeBtn').addEventListener('click', () => showSection('home'));
-    document.getElementById('addBtn').addEventListener('click', () => showSection('add-data'));
-    document.getElementById('reportBtn').addEventListener('click', () => showSection('report'));
-    document.getElementById('performanceBtn').addEventListener('click', () => showSection('performance'));
-    
-    
-    // Form submission - PASTIKAN INI BENAR
-    const tradingForm = document.getElementById('tradingForm');
-    if (tradingForm) {
-        tradingForm.addEventListener('submit', handleFormSubmit);
-        console.log('Trading form event listener added');
-    } else {
-        console.error('Trading form not found!');
-    }
-    
-    // Edit form
-    const editForm = document.getElementById('editForm');
-    if (editForm) {
-        editForm.addEventListener('submit', handleEditSubmit);
-        console.log('Edit form event listener added');
-    }
-    
-    // Filters
-    document.getElementById('applyFilters').addEventListener('click', applyFilters);
-    document.getElementById('resetFilters').addEventListener('click', resetFilters);
-    
-    // Modal
-    document.querySelector('.close').addEventListener('click', closeModal);
-    document.getElementById('cancelEdit').addEventListener('click', closeModal);
-    
-    // Close modal ketika klik di luar modal
-    window.addEventListener('click', (event) => {
-        const modal = document.getElementById('editModal');
-        if (event.target === modal) {
-            closeModal();
-        }
-    });
-    
-    // Initialize fee preview
-    setupFeePreview();
-    
-    // ESC key untuk modal
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') {
-            closeModal();
-        }
-    });
-    
-    console.log('All event listeners setup completed');
-}
-
-// Update showSection untuk handle performance
-function showSection(sectionId) {
-    // Sembunyikan semua section
-    document.querySelectorAll('.section').forEach(section => {
-        section.classList.remove('active');
-    });
-    
-    // Tampilkan section yang dipilih
-    document.getElementById(sectionId).classList.add('active');
-    
-    // Update tombol navigasi aktif
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    const btn = document.querySelector(`#${sectionId}Btn`);
-    if (btn) btn.classList.add('active');
-    
-    // Jika pindah ke home, update summary dan chart
-    if (sectionId === 'home') {
-        updateHomeSummary();
-    }
-    // Jika pindah ke performance, load data performance
-    else if (sectionId === 'performance') {
-        displaySahamPerformance();
-        displayMetodePerformance();
-        displayTradingSummary();
-    }
-}
-
-
-
-
-
-
-
-
-
-
