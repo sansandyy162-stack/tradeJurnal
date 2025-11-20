@@ -158,10 +158,12 @@ async function loadData() {
                     hargaMasuk: parseFloat(row[4]) || 0,
                     hargaKeluar: parseFloat(row[5]) || 0,
                     lot: parseInt(row[6]) || 1,
-                    feeBroker: feeValue,
-                    metodeTrading: row[8] || 'Scalping',
-                    catatan: row[9] || '',
-                    profitLoss: parseFloat(row[10]) || 0
+                    feeBuy: parseFloat(row[7]) || 0,        // ⭐ KOLOM BARU
+                    feeSell: parseFloat(row[8]) || 0,       // ⭐ KOLOM BARU
+                    totalFee: parseFloat(row[9]) || 0,      // ⭐ KOLOM BARU
+                    metodeTrading: row[10] || 'Scalping',   // ⭐ INDEX BERUBAH
+                    catatan: row[11] || '',                 // ⭐ INDEX BERUBAH
+                    profitLoss: parseFloat(row[12]) || 0    // ⭐ INDEX BERUBAH
                 };
             });
             console.log(`✅ Load ${tradingData.length} records berhasil dari Google Sheets`);
@@ -346,8 +348,10 @@ async function handleFormSubmit(event) {
             formData.feeBroker
         );
         
+        formData.feeBuy = calculation.feeBuy;        // ⭐ SIMPAN FEE TERPISAH
+        formData.feeSell = calculation.feeSell;      // ⭐ SIMPAN FEE TERPISAH  
+        formData.totalFee = calculation.totalFee;    // ⭐ SIMPAN TOTAL FEE
         formData.profitLoss = calculation.profitLoss;
-        formData.feeBroker = calculation.totalFee; // Simpan nilai RUPIAH
         
         console.log('Final data to save:', formData);
         
@@ -1202,6 +1206,7 @@ function showSection(sectionId) {
         displayTradingSummary();
     }
 }
+
 
 
 
