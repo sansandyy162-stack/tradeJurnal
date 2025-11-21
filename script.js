@@ -50,9 +50,9 @@ function setupEventListeners() {
     document.getElementById('tradingForm').addEventListener('submit', handleFormSubmit);
     document.getElementById('editForm').addEventListener('submit', handleEditSubmit);
     
-    // Tombol hitung otomatis
-    document.getElementById('calculateBtn').addEventListener('click', calculateAutoFeeForForm);
-    document.getElementById('calculateEditBtn').addEventListener('click', calculateAutoFeeForEdit);
+    // // Tombol hitung otomatis
+    // document.getElementById('calculateBtn').addEventListener('click', calculateAutoFeeForForm);
+    // document.getElementById('calculateEditBtn').addEventListener('click', calculateAutoFeeForEdit);
     
     // Filters
     document.getElementById('applyFilters').addEventListener('click', applyFilters);
@@ -1027,4 +1027,5 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
