@@ -121,19 +121,26 @@ h2 {
 }
 
 .chart-container {
-    background-color: white;
-    padding: 15px;
+     background-color: white;
+    padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    position: relative;
+    min-height: 400px; /* Tinggi minimum untuk chart */
 }
 
 .chart-container h3 {
-    text-align: center;
-    margin-bottom: 15px;
+   text-align: center;
+    margin-bottom: 20px;
     font-size: 16px;
     color: #2c3e50;
+    font-weight: 600;
 }
-
+/* Untuk banyak data points, pastikan chart tetap readable */
+.chart-container canvas {
+    max-width: 100%;
+    height: auto !important;
+}
 /* Forms */
 .form-group {
     margin-bottom: 15px;
@@ -803,8 +810,8 @@ input::placeholder {
     }
     
     .chart-container {
-        padding: 12px;
-        min-height: 250px;
+        min-height: 300px;
+        padding: 15px;
     }
     
     /* Mobile Table */
@@ -982,3 +989,4 @@ button {
 .nav-btn:disabled {
     background-color: #95a5a6 !important;
 }
+
