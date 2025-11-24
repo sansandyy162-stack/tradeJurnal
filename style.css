@@ -1010,3 +1010,147 @@ button {
     font-size: 12px;
 }
 
+/* ⭐⭐ BARU: Toggle Switch Styles ⭐⭐ */
+.toggle-switch {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.toggle-input {
+    display: none;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 25px;
+    padding: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.toggle-slider {
+    width: 50px;
+    height: 24px;
+    background: #95a5a6;
+    border-radius: 20px;
+    position: relative;
+    transition: all 0.3s;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: all 0.3s;
+}
+
+.toggle-input:checked + .toggle-label .toggle-slider {
+    background: #3498db;
+}
+
+.toggle-input:checked + .toggle-label .toggle-slider::before {
+    transform: translateX(26px);
+}
+
+.toggle-text {
+    font-weight: 500;
+    padding: 0 10px;
+    font-size: 14px;
+}
+
+.toggle-description {
+    font-size: 12px;
+    color: #7f8c8d;
+    text-align: center;
+}
+
+/* ⭐⭐ BARU: Position Select Styles ⭐⭐ */
+.position-select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    transition: border-color 0.3s;
+}
+
+.position-select:focus {
+    border-color: #3498db;
+    outline: none;
+}
+
+/* ⭐⭐ BARU: Position Preview Styles ⭐⭐ */
+.position-preview {
+    background: #e8f4fd;
+    border: 1px solid #3498db;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.position-preview h4 {
+    color: #2c3e50;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.preview-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+
+.preview-label {
+    color: #7f8c8d;
+}
+
+.preview-value {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.preview-value.positive {
+    color: #27ae60;
+}
+
+.preview-value.negative {
+    color: #e74c3c;
+}
+
+/* ⭐⭐ BARU: Position Info Styles ⭐⭐ */
+.position-info {
+    background: #f8f9fa;
+    border-left: 4px solid #3498db;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.position-info-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+/* ⭐⭐ BARU: Loading untuk Position Data ⭐⭐ */
+.position-loading {
+    text-align: center;
+    padding: 10px;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
