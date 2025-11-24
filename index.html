@@ -59,6 +59,54 @@
             <!-- Add Data Section -->
             <section id="add-data" class="section">
                 <h2>Tambah Data Trading</h2>
+                <!-- ⭐⭐ BARU: Toggle Switch untuk Posisi Trading ⭐⭐ -->
+                <div class="form-group">
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="positionModeToggle" class="toggle-input">
+                        <label for="positionModeToggle" class="toggle-label">
+                            <span class="toggle-text">Trading Biasa</span>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Posisi Saham</span>
+                        </label>
+                    </div>
+                    <div class="toggle-description">
+                        <span id="toggleDesc">1x Buy + 1x Sell dalam 1 trading</span>
+                    </div>
+                </div>
+                
+                <!-- ⭐⭐ BARU: Position Selection (Hidden by Default) ⭐⭐ -->
+                <div id="positionSelection" class="form-group" style="display: none;">
+                    <label for="positionType">Jenis Transaksi:</label>
+                    <select id="positionType" class="position-select">
+                        <option value="new">Beli - Buat Posisi Baru</option>
+                        <option value="add">Beli - Tambah ke Posisi Existing</option>
+                        <option value="close">Jual - Tutup Posisi</option>
+                        <option value="partial">Jual - Partial Exit</option>
+                    </select>
+                </div>
+                
+                <!-- ⭐⭐ BARU: Existing Positions Dropdown (Hidden by Default) ⭐⭐ -->
+                <div id="existingPositionsContainer" class="form-group" style="display: none;">
+                    <label for="existingPositions">Pilih Posisi:</label>
+                    <select id="existingPositions" class="position-select">
+                        <option value="">-- Pilih Posisi --</option>
+                    </select>
+                    <div id="positionInfo" class="position-info" style="display: none;">
+                        <!-- Position info akan diisi oleh JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- ⭐⭐ BARU: Partial Exit Fields (Hidden by Default) ⭐⭐ -->
+                <div id="partialExitContainer" class="form-group" style="display: none;">
+                    <label for="partialLot">Jumlah LOT Jual:</label>
+                    <input type="number" id="partialLot" min="1" value="1">
+                    <div class="fee-info">Dari total: <span id="totalAvailableLot">0</span> lot</div>
+                </div>
+                
+                <!-- ⭐⭐ BARU: Position Preview ⭐⭐ -->
+                <div id="positionPreview" class="position-preview" style="display: none;">
+                    <!-- Preview akan diisi oleh JavaScript -->
+                </div>
                 <form id="tradingForm">
                     <div class="form-group">
                         <label for="tanggalMasuk">Tanggal Masuk:</label>
@@ -358,6 +406,7 @@
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
