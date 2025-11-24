@@ -759,12 +759,12 @@ function updateHomeSummary() {
 
 // Update chart (sama seperti sebelumnya)
 function updateCharts() {
-     // Line chart - Profit/Loss per HARI
+     // Line chart - Profit/Loss 7 Hari Terakhir
     const dailyData = {};
     
     // Kelompokkan data per hari
     tradingData.forEach(item => {
-        const day = item.tanggalMasuk; // Langsung pakai tanggal format YYYY-MM-DD
+        const day = item.tanggalMasuk;
         if (!dailyData[day]) {
             dailyData[day] = 0;
         }
@@ -772,11 +772,15 @@ function updateCharts() {
     });
     
     // Urutkan tanggal dari terlama ke terbaru
-    const days = Object.keys(dailyData).sort();
-    const dailyPL = days.map(day => dailyData[day]);
+    const allDays = Object.keys(dailyData).sort();
+    const allDailyPL = allDays.map(day => dailyData[day]);
+    
+    // ⭐⭐ AMBIL 7 HARI TERAKHIR SAJA ⭐⭐
+    const last7Days = allDays.slice(-7);
+    const last7DaysPL = allDailyPL.slice(-7);
     
     // Format label tanggal agar lebih readable
-    const formattedDays = days.map(day => {
+    const formattedDays = last7Days.map(day => {
         const date = new Date(day);
         return date.toLocaleDateString('id-ID', { 
             day: 'numeric', 
@@ -795,8 +799,8 @@ function updateCharts() {
         data: {
             labels: formattedDays,
             datasets: [{
-                label: 'Profit/Loss Harian',
-                data: dailyPL,
+                label: 'Profit/Loss 7 Hari Terakhir',
+                data: last7DaysPL,
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.1)',
                 tension: 0.4,
@@ -804,8 +808,8 @@ function updateCharts() {
                 pointBackgroundColor: '#3498db',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6
+                pointRadius: 5,
+                pointHoverRadius: 7
             }]
         },
         options: {
@@ -822,7 +826,7 @@ function updateCharts() {
                         },
                         title: function(context) {
                             // Kembalikan tanggal lengkap di tooltip
-                            const fullDate = new Date(days[context[0].dataIndex]);
+                            const fullDate = new Date(last7Days[context[0].dataIndex]);
                             return fullDate.toLocaleDateString('id-ID', {
                                 weekday: 'long',
                                 year: 'numeric',
@@ -841,11 +845,15 @@ function updateCharts() {
                             return formatCurrency(value).replace('Rp', 'Rp ');
                         },
                         font: {
-                            size: 11
+                            size: 12
                         }
                     },
                     grid: {
                         color: 'rgba(0,0,0,0.1)'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Profit/Loss'
                     }
                 },
                 x: {
@@ -856,8 +864,12 @@ function updateCharts() {
                         maxRotation: 45,
                         minRotation: 45,
                         font: {
-                            size: 10
+                            size: 11
                         }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Tanggal'
                     }
                 }
             },
@@ -1150,6 +1162,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
