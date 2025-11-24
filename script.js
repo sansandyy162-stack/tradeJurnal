@@ -4,6 +4,7 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCf
 // Variabel global
 let tradingData = [];
 let lineChart, pieChart, winRateChart, distributionChart;
+let positions = {};
 
 // ⭐⭐ TAMBAHKAN: Fungsi Loading Time ⭐⭐
 function showLoading(message = 'Menyimpan data...') {
@@ -69,6 +70,7 @@ async function initializeApp() {
     
     // Setup event listeners
     setupEventListeners();
+    setupPositionTradingListeners();
     
     console.log('Memuat data dari Google Sheets...');
     
@@ -170,6 +172,316 @@ function showSection(sectionId) {
             displayTradingSummary();
         }, 100);
     }
+}
+// ⭐⭐ BARU: Setup Event Listeners untuk Position Trading ⭐⭐
+function setupPositionTradingListeners() {
+    const toggle = document.getElementById('positionModeToggle');
+    const positionType = document.getElementById('positionType');
+    const existingPositions = document.getElementById('existingPositions');
+    
+    if (!toggle) return;
+    
+    // Toggle switch listener
+    toggle.addEventListener('change', function() {
+        const isPositionMode = this.checked;
+        togglePositionMode(isPositionMode);
+    });
+    
+    // Position type change listener
+    positionType.addEventListener('change', function() {
+        handlePositionTypeChange(this.value);
+    });
+    
+    // Existing positions change listener
+    existingPositions.addEventListener('change', function() {
+        handlePositionSelection(this.value);
+    });
+    
+    // Real-time preview listeners
+    const previewFields = ['hargaMasuk', 'hargaKeluar', 'lot', 'feeBuy', 'feeSell', 'partialLot'];
+    previewFields.forEach(field => {
+        const element = document.getElementById(field);
+        if (element) {
+            element.addEventListener('input', updatePositionPreview);
+        }
+    });
+}
+// ⭐⭐ BARU: Toggle antara Trading Biasa dan Posisi Saham ⭐⭐
+function togglePositionMode(isPositionMode) {
+    const toggleDesc = document.getElementById('toggleDesc');
+    const positionSelection = document.getElementById('positionSelection');
+    const tanggalKeluarGroup = document.querySelector('label[for="tanggalKeluar"]').parentElement;
+    const hargaKeluarGroup = document.querySelector('label[for="hargaKeluar"]').parentElement;
+    const feeSellGroup = document.querySelector('label[for="feeSell"]').parentElement;
+    
+    if (isPositionMode) {
+        // Mode Posisi Saham
+        toggleDesc.textContent = 'Multiple Buy/Sell dalam 1 posisi';
+        positionSelection.style.display = 'block';
+        
+        // Reset form
+        document.getElementById('positionType').value = 'new';
+        handlePositionTypeChange('new');
+        
+    } else {
+        // Mode Trading Biasa
+        toggleDesc.textContent = '1x Buy + 1x Sell dalam 1 trading';
+        positionSelection.style.display = 'none';
+        
+        // Show semua field
+        tanggalKeluarGroup.style.display = 'block';
+        hargaKeluarGroup.style.display = 'block';
+        feeSellGroup.style.display = 'block';
+        
+        // Hide position-specific elements
+        document.getElementById('existingPositionsContainer').style.display = 'none';
+        document.getElementById('partialExitContainer').style.display = 'none';
+        document.getElementById('positionPreview').style.display = 'none';
+    }
+}
+// ⭐⭐ BARU: Handle perubahan jenis transaksi posisi ⭐⭐
+function handlePositionTypeChange(positionType) {
+    const tanggalKeluarGroup = document.querySelector('label[for="tanggalKeluar"]').parentElement;
+    const hargaKeluarGroup = document.querySelector('label[for="hargaKeluar"]').parentElement;
+    const feeSellGroup = document.querySelector('label[for="feeSell"]').parentElement;
+    const existingPositionsContainer = document.getElementById('existingPositionsContainer');
+    const partialExitContainer = document.getElementById('partialExitContainer');
+    
+    // Reset semua field
+    tanggalKeluarGroup.style.display = 'block';
+    hargaKeluarGroup.style.display = 'block';
+    feeSellGroup.style.display = 'block';
+    existingPositionsContainer.style.display = 'none';
+    partialExitContainer.style.display = 'none';
+    
+    // Update form berdasarkan jenis transaksi
+    switch(positionType) {
+        case 'new': // Beli - Buat Posisi Baru
+            tanggalKeluarGroup.style.display = 'none';
+            hargaKeluarGroup.style.display = 'none';
+            feeSellGroup.style.display = 'none';
+            break;
+            
+        case 'add': // Beli - Tambah ke Posisi Existing
+            tanggalKeluarGroup.style.display = 'none';
+            hargaKeluarGroup.style.display = 'none';
+            feeSellGroup.style.display = 'none';
+            existingPositionsContainer.style.display = 'block';
+            populateExistingPositions('open');
+            break;
+            
+        case 'close': // Jual - Tutup Posisi
+            existingPositionsContainer.style.display = 'block';
+            populateExistingPositions('open');
+            break;
+            
+        case 'partial': // Jual - Partial Exit
+            existingPositionsContainer.style.display = 'block';
+            partialExitContainer.style.display = 'block';
+            populateExistingPositions('open');
+            break;
+    }
+    
+    updatePositionPreview();
+}
+// ⭐⭐ BARU: Populate dropdown existing positions ⭐⭐
+function populateExistingPositions(status = 'open') {
+    const existingPositions = document.getElementById('existingPositions');
+    const positionInfo = document.getElementById('positionInfo');
+    
+    if (!existingPositions) return;
+    
+    existingPositions.innerHTML = '<option value="">-- Pilih Posisi --</option>';
+    positionInfo.style.display = 'none';
+    
+    // Rebuild positions dari trading data
+    const positions = rebuildPositionsFromData();
+    const openPositions = Object.values(positions).filter(pos => pos.status === status);
+    
+    if (openPositions.length === 0) {
+        existingPositions.innerHTML = '<option value="">Tidak ada posisi open</option>';
+        return;
+    }
+    
+    openPositions.forEach(position => {
+        const option = document.createElement('option');
+        option.value = position.id;
+        option.textContent = `${position.kodeSaham} - ${position.totalLot} lot @ ${formatCurrency(position.averagePrice)}`;
+        option.setAttribute('data-position', JSON.stringify(position));
+        existingPositions.appendChild(option);
+    });
+}
+// ⭐⭐ BARU: Handle ketika user memilih posisi existing ⭐⭐
+function handlePositionSelection(positionId) {
+    const positionInfo = document.getElementById('positionInfo');
+    const existingPositions = document.getElementById('existingPositions');
+    const partialLotInput = document.getElementById('partialLot');
+    const totalAvailableLot = document.getElementById('totalAvailableLot');
+    
+    if (!positionId) {
+        positionInfo.style.display = 'none';
+        return;
+    }
+    
+    const selectedOption = existingPositions.querySelector(`option[value="${positionId}"]`);
+    if (!selectedOption) return;
+    
+    const position = JSON.parse(selectedOption.getAttribute('data-position'));
+    
+    // Update position info
+    positionInfo.innerHTML = `
+        <div class="position-info-item">
+            <span>Harga Rata:</span>
+            <span>${formatCurrency(position.averagePrice)}</span>
+        </div>
+        <div class="position-info-item">
+            <span>Total Lot:</span>
+            <span>${position.totalLot}</span>
+        </div>
+        <div class="position-info-item">
+            <span>Total Investasi:</span>
+            <span>${formatCurrency(position.totalInvestment)}</span>
+        </div>
+        <div class="position-info-item">
+            <span>Total Fee Beli:</span>
+            <span>${formatCurrency(position.totalFeeBuy)}</span>
+        </div>
+    `;
+    positionInfo.style.display = 'block';
+    
+    // Update partial exit info
+    if (partialLotInput) {
+        partialLotInput.max = position.totalLot;
+        totalAvailableLot.textContent = position.totalLot;
+        partialLotInput.value = Math.min(1, position.totalLot);
+    }
+    
+    updatePositionPreview();
+}
+// ⭐⭐ BARU: Update real-time position preview ⭐⭐
+function updatePositionPreview() {
+    const preview = document.getElementById('positionPreview');
+    const positionType = document.getElementById('positionType')?.value;
+    const isPositionMode = document.getElementById('positionModeToggle')?.checked;
+    
+    if (!isPositionMode || !positionType) {
+        preview.style.display = 'none';
+        return;
+    }
+    
+    let previewHTML = '<h4>Preview:</h4>';
+    
+    switch(positionType) {
+        case 'new':
+            previewHTML += getNewPositionPreview();
+            break;
+        case 'add':
+            previewHTML += getAddPositionPreview();
+            break;
+        case 'close':
+        case 'partial':
+            previewHTML += getExitPositionPreview();
+            break;
+    }
+    
+    preview.innerHTML = previewHTML;
+    preview.style.display = 'block';
+}
+
+function getNewPositionPreview() {
+    const kodeSaham = document.getElementById('kodeSaham').value || '?';
+    const lot = parseInt(document.getElementById('lot').value) || 0;
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+    
+    return `
+        <div class="preview-item">
+            <span class="preview-label">Posisi Baru:</span>
+            <span class="preview-value">${kodeSaham} - ${lot} lot</span>
+        </div>
+        <div class="preview-item">
+            <span class="preview-label">Harga Beli:</span>
+            <span class="preview-value">${formatCurrency(hargaMasuk)}</span>
+        </div>
+    `;
+}
+
+function getAddPositionPreview() {
+    // Implementasi preview untuk average down
+    const selectedPosition = getSelectedPosition();
+    if (!selectedPosition) return '<div class="preview-item">Pilih posisi terlebih dahulu</div>';
+    
+    const lot = parseInt(document.getElementById('lot').value) || 0;
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+    
+    // Calculate new average
+    const newTotalLot = selectedPosition.totalLot + lot;
+    const newTotalValue = (selectedPosition.totalLot * 100 * selectedPosition.averagePrice) + (lot * 100 * hargaMasuk);
+    const newAveragePrice = newTotalValue / (newTotalLot * 100);
+    
+    return `
+        <div class="preview-item">
+            <span class="preview-label">Posisi Saat Ini:</span>
+            <span class="preview-value">${selectedPosition.totalLot} lot @ ${formatCurrency(selectedPosition.averagePrice)}</span>
+        </div>
+        <div class="preview-item">
+            <span class="preview-label">Setelah Average:</span>
+            <span class="preview-value">${newTotalLot} lot @ ${formatCurrency(Math.round(newAveragePrice))}</span>
+        </div>
+    `;
+}
+
+function getExitPositionPreview() {
+    // Implementasi preview untuk exit
+    const selectedPosition = getSelectedPosition();
+    if (!selectedPosition) return '<div class="preview-item">Pilih posisi terlebih dahulu</div>';
+    
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+    const positionType = document.getElementById('positionType').value;
+    const exitLot = positionType === 'partial' ? 
+        parseInt(document.getElementById('partialLot').value) || 0 : 
+        selectedPosition.totalLot;
+    
+    // Calculate profit/loss
+    const profitLoss = calculatePositionProfitLoss(selectedPosition, hargaKeluar, exitLot);
+    
+    return `
+        <div class="preview-item">
+            <span class="preview-label">Exit dari:</span>
+            <span class="preview-value">${exitLot} lot dari ${selectedPosition.totalLot} lot</span>
+        </div>
+        <div class="preview-item">
+            <span class="preview-label">Estimasi P/L:</span>
+            <span class="preview-value ${profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(profitLoss)}</span>
+        </div>
+    `;
+}
+    // ⭐⭐ BARU: Helper functions untuk position trading ⭐⭐
+function getSelectedPosition() {
+    const existingPositions = document.getElementById('existingPositions');
+    const selectedOption = existingPositions?.options[existingPositions.selectedIndex];
+    
+    if (!selectedOption || !selectedOption.value) return null;
+    
+    return JSON.parse(selectedOption.getAttribute('data-position'));
+}
+
+function calculatePositionProfitLoss(position, hargaKeluar, exitLot) {
+    const totalShares = exitLot * 100;
+    const totalBuyValue = totalShares * position.averagePrice;
+    const totalSellValue = totalShares * hargaKeluar;
+    
+    // Estimate fee jual (0.25132%)
+    const estimatedFeeSell = Math.round(totalSellValue * (0.25132 / 100));
+    
+    // Calculate allocated fee buy
+    const allocatedFeeBuy = (exitLot / position.totalLot) * position.totalFeeBuy;
+    
+    const profitLoss = totalSellValue - totalBuyValue - allocatedFeeBuy - estimatedFeeSell;
+    return Math.round(profitLoss);
+}
+
+function generatePositionId(kodeSaham) {
+    return `POS-${kodeSaham}-${Date.now()}`;
 }
 // ⭐⭐ BARU: Fungsi untuk parse PositionData ⭐⭐
 function parsePositionData(positionDataString) {
@@ -1284,6 +1596,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
