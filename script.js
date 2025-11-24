@@ -282,7 +282,7 @@ function calculateAutoFeeForForm() {
         
         document.getElementById('feeBuy').value = autoFee.feeBuy;
         document.getElementById('feeSell').value = autoFee.feeSell;
-        document.getElementById('totalFee').value = autoFee.totalFee;
+        //document.getElementById('totalFee').value = autoFee.totalFee;
         
         alert(`Fee otomatis telah dihitung:\nFee Beli: ${formatCurrency(autoFee.feeBuy)}\nFee Jual: ${formatCurrency(autoFee.feeSell)}\nTotal Fee: ${formatCurrency(autoFee.totalFee)}`);
     } else {
@@ -404,7 +404,7 @@ async function handleFormSubmit(event) {
         // Reset form
         document.getElementById('tradingForm').reset();
         document.getElementById('lot').value = 1;
-        document.getElementById('totalFee').value = ''; // Reset total fee
+        //document.getElementById('totalFee').value = ''; // Reset total fee
         
         // Update tampilan
         updateHomeSummary();
@@ -1027,5 +1027,6 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
