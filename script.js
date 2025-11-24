@@ -5,6 +5,60 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCf
 let tradingData = [];
 let lineChart, pieChart, winRateChart, distributionChart;
 
+// ⭐⭐ TAMBAHKAN: Fungsi Loading Time ⭐⭐
+function showLoading(message = 'Menyimpan data...') {
+    const loadingEl = document.createElement('div');
+    loadingEl.id = 'loadingOverlay';
+    loadingEl.innerHTML = `
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>${message}</p>
+            <div class="loading-timer">Estimasi: 2-5 detik</div>
+        </div>
+    `;
+    document.body.appendChild(loadingEl);
+}
+
+function hideLoading() {
+    const loadingEl = document.getElementById('loadingOverlay');
+    if (loadingEl) {
+        loadingEl.remove();
+    }
+}
+
+// ⭐⭐ TAMBAHKAN: Fungsi untuk disable/enable form ⭐⭐
+function disableForm(buttonId = 'submitBtn') {
+    const button = document.getElementById(buttonId);
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = 'Menyimpan...';
+    }
+}
+
+function enableForm(buttonId = 'submitBtn') {
+    const button = document.getElementById(buttonId);
+    if (button) {
+        button.disabled = false;
+        button.innerHTML = 'Simpan Data';
+    }
+}
+
+function disableEditForm() {
+    const button = document.getElementById('updateBtn');
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = 'Mengupdate...';
+    }
+}
+
+function enableEditForm() {
+    const button = document.getElementById('updateBtn');
+    if (button) {
+        button.disabled = false;
+        button.innerHTML = 'Update Data';
+    }
+}
+
 // Inisialisasi aplikasi
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
@@ -354,7 +408,9 @@ async function handleFormSubmit(event) {
         alert('Jumlah LOT minimal 1!');
         return;
     }
-    
+    // Tampilkan loading dan disable form
+    showLoading('Menyimpan data ke Google Sheets...');
+    disableForm();
     try {
         // Ambil nilai dari form
         const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
@@ -397,7 +453,9 @@ async function handleFormSubmit(event) {
             tradingData = tradingData.filter(item => item.id !== formData.id);
             return;
         }
-        
+         // Sembunyikan loading dan enable form
+        hideLoading();
+        enableForm();
         // Tampilkan notifikasi sukses
         alert(`✅ Data trading berhasil disimpan ke Google Sheets!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`);
         
@@ -552,7 +610,9 @@ async function handleEditSubmit(event) {
         alert('Jumlah LOT minimal 1!');
         return;
     }
-    
+    // Tampilkan loading dan disable form
+    showLoading('Mengupdate data di Google Sheets...');
+    disableEditForm();
     // Ambil nilai fee
     const feeBuy = parseFloat(document.getElementById('editFeeBuy').value) || 0;
     const feeSell = parseFloat(document.getElementById('editFeeSell').value) || 0;
@@ -585,7 +645,9 @@ async function handleEditSubmit(event) {
     
     // Simpan perubahan
     await saveData();
-    
+    // Sembunyikan loading dan enable form
+        hideLoading();
+        enableEditForm();
     // Tutup modal
     closeModal();
     
@@ -601,11 +663,15 @@ async function deleteTradingData(id) {
     if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) {
         return;
     }
+    // Tampilkan loading
+    showLoading('Menghapus data dari Google Sheets...');
     
     tradingData = tradingData.filter(item => item.id !== id);
     
     // Simpan perubahan
     await saveData();
+    // Sembunyikan loading
+        hideLoading();
     
     // Update tampilan
     updateHomeSummary();
@@ -1027,6 +1093,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
