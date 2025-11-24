@@ -214,6 +214,10 @@ function togglePositionMode(isPositionMode) {
     const hargaKeluarGroup = document.querySelector('label[for="hargaKeluar"]').parentElement;
     const feeSellGroup = document.querySelector('label[for="feeSell"]').parentElement;
     
+    // ✅ Reset kodeSaham field ketika ganti mode
+    document.getElementById('kodeSaham').value = '';
+    document.getElementById('kodeSaham').readOnly = false;
+    
     if (isPositionMode) {
         // Mode Posisi Saham
         toggleDesc.textContent = 'Multiple Buy/Sell dalam 1 posisi';
@@ -284,7 +288,6 @@ function handlePositionTypeChange(positionType) {
     
     updatePositionPreview();
 }
-// ⭐⭐ BARU: Populate dropdown existing positions ⭐⭐
 function populateExistingPositions(status = 'open') {
     const existingPositions = document.getElementById('existingPositions');
     const positionInfo = document.getElementById('positionInfo');
@@ -293,6 +296,10 @@ function populateExistingPositions(status = 'open') {
     
     existingPositions.innerHTML = '<option value="">-- Pilih Posisi --</option>';
     positionInfo.style.display = 'none';
+    
+    // Reset kodeSaham field
+    document.getElementById('kodeSaham').value = '';
+    document.getElementById('kodeSaham').readOnly = false;
     
     // Rebuild positions dari trading data
     const positions = rebuildPositionsFromData();
@@ -307,10 +314,22 @@ function populateExistingPositions(status = 'open') {
         const option = document.createElement('option');
         option.value = position.id;
         option.textContent = `${position.kodeSaham} - ${position.totalLot} lot @ ${formatCurrency(position.averagePrice)}`;
-        option.setAttribute('data-position', JSON.stringify(position));
+        
+        // ✅ PAKAI KODE BARU - Pastikan kodeSaham selalu ada
+        option.setAttribute('data-position', JSON.stringify({
+            id: position.id,
+            kodeSaham: position.kodeSaham, // ✅ INI YANG PENTING
+            averagePrice: position.averagePrice,
+            totalLot: position.totalLot,
+            totalInvestment: position.totalInvestment,
+            totalFeeBuy: position.totalFeeBuy,
+            entries: position.entries || []
+        }));
+        
         existingPositions.appendChild(option);
     });
 }
+
 // ⭐⭐ BARU: Handle ketika user memilih posisi existing ⭐⭐
 function handlePositionSelection(positionId) {
     const positionInfo = document.getElementById('positionInfo');
@@ -327,6 +346,12 @@ function handlePositionSelection(positionId) {
     if (!selectedOption) return;
     
     const position = JSON.parse(selectedOption.getAttribute('data-position'));
+
+    // ✅ SOLUSI: Auto-fill kode saham ke form
+    document.getElementById('kodeSaham').value = position.kodeSaham || '';
+    
+    // ✅ Juga set sebagai readonly agar tidak bisa diubah
+    document.getElementById('kodeSaham').readOnly = true;
     
     // Update position info
     positionInfo.innerHTML = `
@@ -1937,6 +1962,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
