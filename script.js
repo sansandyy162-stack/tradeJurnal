@@ -810,10 +810,31 @@ function calculateAutoFeeForEdit() {
         alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
     }
 }
-// ⭐⭐ UPDATE handleFormSubmit() ⭐⭐
+// ⭐⭐ PERBAIKAN: handleFormSubmit - fix structure ⭐⭐
 async function handleFormSubmit(event) {
     event.preventDefault();
     
+    const isPositionMode = document.getElementById('positionModeToggle')?.checked;
+    
+    if (isPositionMode) {
+        // Mode Position Trading - sementara placeholder
+        alert('Fitur Position Trading akan segera diimplementasi!');
+        
+        // Untuk testing, toggle kembali ke mode biasa
+        if (document.getElementById('positionModeToggle')) {
+            document.getElementById('positionModeToggle').checked = false;
+            const toggleEvent = new Event('change');
+            document.getElementById('positionModeToggle').dispatchEvent(toggleEvent);
+        }
+        return;
+    } else {
+        // Mode Trading Biasa (existing)
+        await handleRegularFormSubmit();
+    }
+}
+
+// ⭐⭐ BARU: Handle Regular Trading ⭐⭐
+async function handleRegularFormSubmit() {
     // Validasi form
     const tanggalMasuk = document.getElementById('tanggalMasuk').value;
     const tanggalKeluar = document.getElementById('tanggalKeluar').value;
@@ -836,15 +857,15 @@ async function handleFormSubmit(event) {
         alert('Jumlah LOT minimal 1!');
         return;
     }
+    
     // Tampilkan loading dan disable form
     showLoading('Menyimpan data ke Google Sheets...');
     disableForm();
+    
     try {
-        // Ambil nilai dari form
         const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
         const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
         
-        // Hitung profit/loss
         const calculation = calculateProfitLoss(
             parseFloat(hargaMasuk),
             parseFloat(hargaKeluar),
@@ -880,24 +901,30 @@ async function handleFormSubmit(event) {
         
         if (!saveResult) {
             tradingData = tradingData.filter(item => item.id !== formData.id);
+            hideLoading();
+            enableForm();
             return;
         }
-         // Sembunyikan loading dan enable form
+        
+        // Sembunyikan loading dan enable form
         hideLoading();
         enableForm();
+        
         // Tampilkan notifikasi sukses
         alert(`✅ Data trading berhasil disimpan ke Google Sheets!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`);
         
         // Reset form
         document.getElementById('tradingForm').reset();
         document.getElementById('lot').value = 1;
-        //document.getElementById('totalFee').value = ''; // Reset total fee
         
         // Update tampilan
         updateHomeSummary();
         displayTradingData();
         
     } catch (error) {
+        // Sembunyikan loading dan enable form jika error
+        hideLoading();
+        enableForm();
         console.error('Error in form submission:', error);
         alert('❌ Error menyimpan data: ' + error.message);
     }
@@ -1596,6 +1623,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
