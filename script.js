@@ -510,53 +510,69 @@ function calculatePositionProfitLoss(position, hargaKeluar, exitLot) {
 function generatePositionId(kodeSaham) {
     return `POS-${kodeSaham}-${Date.now()}`;
 }
-// ⭐⭐ BARU: Fungsi untuk parse PositionData ⭐⭐
+// ⭐⭐ BARU: Fungsi untuk parse PositionData - DIPERBAIKI ⭐⭐
 function parsePositionData(positionDataString) {
     try {
         if (!positionDataString || positionDataString.trim() === '') {
             return null;
         }
         
-        // Coba parse sebagai JSON
-        return JSON.parse(positionDataString);
+        // Coba parse sebagai JSON (untuk data baru)
+        if (positionDataString.trim().startsWith('{') && positionDataString.includes('":"')) {
+            return JSON.parse(positionDataString);
+        }
+        
+        // Fallback: parse format key=value (untuk data existing)
+        console.log('🔄 Parsing legacy PositionData format:', positionDataString);
+        const data = {};
+        
+        // Clean the string - remove curly braces
+        const cleanString = positionDataString.replace(/[{}]/g, '');
+        
+        // Split by comma and process each key=value pair
+        const pairs = cleanString.split(',');
+        
+        pairs.forEach(pair => {
+            const [key, value] = pair.split('=').map(item => item.trim());
+            if (key && value !== undefined) {
+                // Try to parse numbers and booleans
+                if (value === 'true') data[key] = true;
+                else if (value === 'false') data[key] = false;
+                else if (value === 'null') data[key] = null;
+                else if (!isNaN(value) && value !== '') data[key] = parseFloat(value);
+                else data[key] = value;
+            }
+        });
+        
+        console.log('✅ Parsed legacy data:', data);
+        return Object.keys(data).length > 0 ? data : null;
+        
     } catch (error) {
         console.warn('❌ Gagal parse PositionData:', positionDataString, error);
-        
-        // Fallback: coba parse format key=value|key=value
-        try {
-            const data = {};
-            const pairs = positionDataString.split('|');
-            
-            pairs.forEach(pair => {
-                const [key, value] = pair.split('=');
-                if (key && value) {
-                    // Try to parse numbers and booleans
-                    if (value === 'true') data[key] = true;
-                    else if (value === 'false') data[key] = false;
-                    else if (!isNaN(value) && value !== '') data[key] = parseFloat(value);
-                    else data[key] = value;
-                }
-            });
-            
-            return Object.keys(data).length > 0 ? data : null;
-        } catch (fallbackError) {
-            console.warn('❌ Fallback parsing juga gagal:', fallbackError);
-            return null;
-        }
+        return null;
     }
 }
 
-// ⭐⭐ BARU: Fungsi untuk serialize PositionData ⭐⭐
+// ⭐⭐ BARU: Fungsi untuk serialize PositionData - DIPERBAIKI ⭐⭐
 function serializePositionData(positionData) {
     if (!positionData) return '';
     
     try {
+        // Simpan sebagai JSON string yang valid
         return JSON.stringify(positionData);
     } catch (error) {
         console.error('❌ Gagal serialize PositionData:', error);
-        return '';
+        
+        // Fallback: format key=value legacy
+        const pairs = [];
+        for (const [key, value] of Object.entries(positionData)) {
+            pairs.push(`${key}=${value}`);
+        }
+        return `{${pairs.join(', ')}}`;
     }
 }
+
+
 // ⭐⭐ BARU: Rebuild positions dari PositionData ⭐⭐
 function rebuildPositionsFromData() {
     console.log('🔄 Rebuilding positions from PositionData...');
@@ -1962,6 +1978,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
