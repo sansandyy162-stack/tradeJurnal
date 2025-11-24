@@ -759,19 +759,30 @@ function updateHomeSummary() {
 
 // Update chart (sama seperti sebelumnya)
 function updateCharts() {
-    // Line chart - Profit/Loss per bulan
-    const monthlyData = {};
+     // Line chart - Profit/Loss per HARI
+    const dailyData = {};
     
+    // Kelompokkan data per hari
     tradingData.forEach(item => {
-        const month = item.tanggalMasuk.substring(0, 7);
-        if (!monthlyData[month]) {
-            monthlyData[month] = 0;
+        const day = item.tanggalMasuk; // Langsung pakai tanggal format YYYY-MM-DD
+        if (!dailyData[day]) {
+            dailyData[day] = 0;
         }
-        monthlyData[month] += item.profitLoss;
+        dailyData[day] += item.profitLoss;
     });
     
-    const months = Object.keys(monthlyData).sort();
-    const monthlyPL = months.map(month => monthlyData[month]);
+    // Urutkan tanggal dari terlama ke terbaru
+    const days = Object.keys(dailyData).sort();
+    const dailyPL = days.map(day => dailyData[day]);
+    
+    // Format label tanggal agar lebih readable
+    const formattedDays = days.map(day => {
+        const date = new Date(day);
+        return date.toLocaleDateString('id-ID', { 
+            day: 'numeric', 
+            month: 'short' 
+        });
+    });
     
     const lineCtx = document.getElementById('lineChart');
     if (!lineCtx) return;
@@ -782,31 +793,77 @@ function updateCharts() {
     lineChart = new Chart(lineCanvas, {
         type: 'line',
         data: {
-            labels: months,
+            labels: formattedDays,
             datasets: [{
-                label: 'Profit/Loss',
-                data: monthlyPL,
+                label: 'Profit/Loss Harian',
+                data: dailyPL,
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                tension: 0.1,
-                fill: true
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#3498db',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Profit/Loss: ${formatCurrency(context.raw)}`;
+                        },
+                        title: function(context) {
+                            // Kembalikan tanggal lengkap di tooltip
+                            const fullDate = new Date(days[context[0].dataIndex]);
+                            return fullDate.toLocaleDateString('id-ID', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                            });
+                        }
+                    }
                 }
             },
             scales: {
                 y: {
+                    beginAtZero: true,
                     ticks: {
                         callback: function(value) {
                             return formatCurrency(value).replace('Rp', 'Rp ');
+                        },
+                        font: {
+                            size: 11
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45,
+                        font: {
+                            size: 10
                         }
                     }
                 }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
             }
         }
     });
@@ -1093,6 +1150,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
