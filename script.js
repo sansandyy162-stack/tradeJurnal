@@ -171,7 +171,115 @@ function showSection(sectionId) {
         }, 100);
     }
 }
+// ⭐⭐ BARU: Fungsi untuk parse PositionData ⭐⭐
+function parsePositionData(positionDataString) {
+    try {
+        if (!positionDataString || positionDataString.trim() === '') {
+            return null;
+        }
+        
+        // Coba parse sebagai JSON
+        return JSON.parse(positionDataString);
+    } catch (error) {
+        console.warn('❌ Gagal parse PositionData:', positionDataString, error);
+        
+        // Fallback: coba parse format key=value|key=value
+        try {
+            const data = {};
+            const pairs = positionDataString.split('|');
+            
+            pairs.forEach(pair => {
+                const [key, value] = pair.split('=');
+                if (key && value) {
+                    // Try to parse numbers and booleans
+                    if (value === 'true') data[key] = true;
+                    else if (value === 'false') data[key] = false;
+                    else if (!isNaN(value) && value !== '') data[key] = parseFloat(value);
+                    else data[key] = value;
+                }
+            });
+            
+            return Object.keys(data).length > 0 ? data : null;
+        } catch (fallbackError) {
+            console.warn('❌ Fallback parsing juga gagal:', fallbackError);
+            return null;
+        }
+    }
+}
 
+// ⭐⭐ BARU: Fungsi untuk serialize PositionData ⭐⭐
+function serializePositionData(positionData) {
+    if (!positionData) return '';
+    
+    try {
+        return JSON.stringify(positionData);
+    } catch (error) {
+        console.error('❌ Gagal serialize PositionData:', error);
+        return '';
+    }
+}
+// ⭐⭐ BARU: Rebuild positions dari PositionData ⭐⭐
+function rebuildPositionsFromData() {
+    console.log('🔄 Rebuilding positions from PositionData...');
+    
+    const positions = {};
+    
+    tradingData.forEach(trade => {
+        if (trade.positionData && trade.positionData.positionId) {
+            const positionId = trade.positionData.positionId;
+            
+            if (!positions[positionId]) {
+                positions[positionId] = {
+                    id: positionId,
+                    kodeSaham: trade.kodeSaham,
+                    status: 'open',
+                    entries: [],
+                    totalLot: 0,
+                    totalFeeBuy: 0,
+                    averagePrice: 0,
+                    totalInvestment: 0
+                };
+            }
+            
+            // Add entry atau exit berdasarkan transactionType
+            if (trade.positionData.transactionType === 'entry') {
+                positions[positionId].entries.push({
+                    id: trade.id,
+                    tanggal: trade.tanggalMasuk,
+                    lot: trade.lot,
+                    harga: trade.hargaMasuk,
+                    fee: trade.feeBuy
+                });
+                
+                positions[positionId].totalLot += trade.lot;
+                positions[positionId].totalFeeBuy += trade.feeBuy;
+                
+                // Recalculate average price
+                const totalShares = positions[positionId].entries.reduce((sum, entry) => 
+                    sum + (entry.lot * 100 * entry.harga), 0);
+                const totalLot = positions[positionId].entries.reduce((sum, entry) => 
+                    sum + entry.lot, 0);
+                
+                positions[positionId].averagePrice = totalLot > 0 ? 
+                    Math.round(totalShares / (totalLot * 100)) : 0;
+                positions[positionId].totalInvestment = totalShares + positions[positionId].totalFeeBuy;
+                
+            } else if (trade.positionData.transactionType === 'exit') {
+                positions[positionId].status = 'closed';
+                positions[positionId].exit = {
+                    tanggal: trade.tanggalKeluar,
+                    hargaKeluar: trade.hargaKeluar,
+                    lot: trade.lot,
+                    feeSell: trade.feeSell,
+                    profitLoss: trade.profitLoss
+                };
+            }
+        }
+    });
+    
+    console.log('✅ Rebuilt positions:', Object.keys(positions).length);
+    return positions;
+}
 // Fungsi untuk load data dari Google Apps Script
 async function loadData() {
     try {
@@ -211,11 +319,14 @@ async function loadData() {
                     totalFee: parseFloat(row[9]) || 0,
                     profitLoss: parseFloat(row[10]) || 0,
                     metodeTrading: row[11] || 'Scalping',
-                    catatan: row[12] || ''
+                    catatan: row[12] || '',
+                    positionData: row[13] ? parsePositionData(row[13]) : null
                 };
             }).filter(item => item !== null); // Hapus null values
             
             console.log(`✅ Load ${tradingData.length} records berhasil dari Google Sheets`);
+            // ⭐ BARU: Rebuild positions dari PositionData
+            rebuildPositionsFromData();
         } else {
             tradingData = [];
             console.log('ℹ️ Tidak ada data di Google Sheets');
@@ -231,6 +342,11 @@ async function saveData() {
     console.log('💾 Menyimpan data ke Google Sheets...');
     
     try {
+        // ⭐ UPDATE: Sertakan PositionData dalam data yang disimpan
+        const dataToSave = tradingData.map(item => ({
+            ...item,
+            positionData: serializePositionData(item.positionData)
+        }));
         const response = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
             headers: {
@@ -439,6 +555,7 @@ async function handleFormSubmit(event) {
             profitLoss: calculation.profitLoss,
             metodeTrading: document.getElementById('metodeTrading').value,
             catatan: document.getElementById('catatan').value
+            positionData: null
         };
         
         console.log('Final data to save:', formData);
@@ -513,6 +630,10 @@ function displayTradingData(filteredData = null) {
     
     dataToDisplay.forEach(item => {
         const row = document.createElement('tr');
+        
+         // ⭐ BARU: Add position indicator
+        const positionInfo = item.positionData ? 
+            `<span class="position-badge" title="Position: ${item.positionData.positionId}">📊</span>` : '';
         
         row.innerHTML = `
             <td>${formatDate(item.tanggalMasuk)}</td>
@@ -641,6 +762,7 @@ async function handleEditSubmit(event) {
         profitLoss: calculation.profitLoss,
         metodeTrading: document.getElementById('editMetodeTrading').value,
         catatan: document.getElementById('editCatatan').value
+        positionData: null
     };
     
     // Simpan perubahan
@@ -1162,6 +1284,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
