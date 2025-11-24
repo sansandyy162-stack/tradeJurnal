@@ -465,20 +465,22 @@ function getSelectedPosition() {
     return JSON.parse(selectedOption.getAttribute('data-position'));
 }
 
+// ⭐⭐ UPDATE: calculatePositionProfitLoss dengan fee allocation ⭐⭐
 function calculatePositionProfitLoss(position, hargaKeluar, exitLot) {
     const totalShares = exitLot * 100;
     const totalBuyValue = totalShares * position.averagePrice;
     const totalSellValue = totalShares * hargaKeluar;
     
-    // Estimate fee jual (0.25132%)
-    const estimatedFeeSell = Math.round(totalSellValue * (0.25132 / 100));
-    
-    // Calculate allocated fee buy
+    // Hitung allocated fee buy
     const allocatedFeeBuy = (exitLot / position.totalLot) * position.totalFeeBuy;
+    
+    // Hitung fee jual (0.25132%)
+    const estimatedFeeSell = Math.round(totalSellValue * (0.25132 / 100));
     
     const profitLoss = totalSellValue - totalBuyValue - allocatedFeeBuy - estimatedFeeSell;
     return Math.round(profitLoss);
 }
+
 
 function generatePositionId(kodeSaham) {
     return `POS-${kodeSaham}-${Date.now()}`;
@@ -810,23 +812,18 @@ function calculateAutoFeeForEdit() {
         alert('Harap isi harga masuk dan harga keluar terlebih dahulu!');
     }
 }
-// ⭐⭐ PERBAIKAN: handleFormSubmit - fix structure ⭐⭐
+
+
+// ⭐⭐ UPDATE LENGKAP: handleFormSubmit untuk handle Position Trading ⭐⭐
 async function handleFormSubmit(event) {
     event.preventDefault();
     
-    const isPositionMode = document.getElementById('positionModeToggle')?.checked;
+    const isPositionMode = document.getElementById('positionModeToggle').checked;
+    const positionType = document.getElementById('positionType').value;
     
     if (isPositionMode) {
-        // Mode Position Trading - sementara placeholder
-        alert('Fitur Position Trading akan segera diimplementasi!');
-        
-        // Untuk testing, toggle kembali ke mode biasa
-        if (document.getElementById('positionModeToggle')) {
-            document.getElementById('positionModeToggle').checked = false;
-            const toggleEvent = new Event('change');
-            document.getElementById('positionModeToggle').dispatchEvent(toggleEvent);
-        }
-        return;
+        // Mode Position Trading
+        await handlePositionFormSubmit(positionType);
     } else {
         // Mode Trading Biasa (existing)
         await handleRegularFormSubmit();
@@ -928,6 +925,323 @@ async function handleRegularFormSubmit() {
         console.error('Error in form submission:', error);
         alert('❌ Error menyimpan data: ' + error.message);
     }
+}
+
+// ⭐⭐ BARU: Handle Position Trading Submit ⭐⭐
+async function handlePositionFormSubmit(positionType) {
+    // Validasi berdasarkan jenis transaksi
+    const validation = validatePositionForm(positionType);
+    if (!validation.isValid) {
+        alert(validation.message);
+        return;
+    }
+    
+    // Tampilkan loading dan disable form
+    showLoading('Menyimpan data posisi ke Google Sheets...');
+    disableForm();
+    
+    try {
+        let formData;
+        let successMessage;
+        
+        switch(positionType) {
+            case 'new':
+                formData = await handleNewPosition();
+                successMessage = `✅ Posisi baru berhasil dibuat!\n\nKode Saham: ${formData.kodeSaham}\nLot: ${formData.lot}\nHarga Rata: ${formatCurrency(formData.hargaMasuk)}`;
+                break;
+                
+            case 'add':
+                formData = await handleAddToPosition();
+                successMessage = `✅ Berhasil menambah ke posisi existing!\n\nKode Saham: ${formData.kodeSaham}\nTotal Lot: ${formData.positionData.currentTotalLot}\nHarga Rata Baru: ${formatCurrency(formData.positionData.currentAvgPrice)}`;
+                break;
+                
+            case 'close':
+                formData = await handleClosePosition();
+                successMessage = `✅ Posisi berhasil ditutup!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`;
+                break;
+                
+            case 'partial':
+                formData = await handlePartialExit();
+                successMessage = `✅ Partial exit berhasil!\n\nKode Saham: ${formData.kodeSaham}\nLot Terjual: ${formData.lot}\nRealized P/L: ${formatCurrency(formData.profitLoss)}`;
+                break;
+        }
+        
+        if (!formData) {
+            throw new Error('Gagal membuat data position');
+        }
+        
+        console.log('Final position data to save:', formData);
+        
+        // Tambahkan ke array data
+        tradingData.push(formData);
+        
+        // Simpan ke Google Sheets
+        const saveResult = await saveData();
+        
+        if (!saveResult) {
+            tradingData = tradingData.filter(item => item.id !== formData.id);
+            hideLoading();
+            enableForm();
+            return;
+        }
+        
+        // Sembunyikan loading dan enable form
+        hideLoading();
+        enableForm();
+        
+        // Tampilkan notifikasi sukses
+        alert(successMessage);
+        
+        // Reset form dan kembali ke mode biasa
+        document.getElementById('tradingForm').reset();
+        document.getElementById('lot').value = 1;
+        document.getElementById('positionModeToggle').checked = false;
+        const toggleEvent = new Event('change');
+        document.getElementById('positionModeToggle').dispatchEvent(toggleEvent);
+        
+        // Update tampilan
+        updateHomeSummary();
+        displayTradingData();
+        
+    } catch (error) {
+        // Sembunyikan loading dan enable form jika error
+        hideLoading();
+        enableForm();
+        console.error('Error in position form submission:', error);
+        alert('❌ Error menyimpan data posisi: ' + error.message);
+    }
+}
+
+// ⭐⭐ BARU: Validasi Form Position ⭐⭐
+function validatePositionForm(positionType) {
+    const kodeSaham = document.getElementById('kodeSaham').value;
+    const lot = parseInt(document.getElementById('lot').value) || 0;
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+    const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+    
+    // Validasi umum
+    if (!kodeSaham) {
+        return { isValid: false, message: 'Kode Saham harus diisi!' };
+    }
+    
+    if (lot < 1) {
+        return { isValid: false, message: 'Jumlah LOT minimal 1!' };
+    }
+    
+    // Validasi berdasarkan jenis transaksi
+    switch(positionType) {
+        case 'new':
+        case 'add':
+            if (hargaMasuk <= 0) {
+                return { isValid: false, message: 'Harga Beli harus diisi!' };
+            }
+            break;
+            
+        case 'close':
+        case 'partial':
+            if (hargaKeluar <= 0) {
+                return { isValid: false, message: 'Harga Jual harus diisi!' };
+            }
+            break;
+    }
+    
+    // Validasi untuk transaksi existing
+    if (positionType === 'add' || positionType === 'close' || positionType === 'partial') {
+        const selectedPosition = getSelectedPosition();
+        if (!selectedPosition) {
+            return { isValid: false, message: 'Pilih posisi terlebih dahulu!' };
+        }
+        
+        // Validasi partial exit
+        if (positionType === 'partial') {
+            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
+            if (partialLot < 1) {
+                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
+            }
+            if (partialLot > selectedPosition.totalLot) {
+                return { isValid: false, message: `Jumlah LOT jual tidak boleh lebih dari ${selectedPosition.totalLot} lot!` };
+            }
+        }
+    }
+    
+    return { isValid: true, message: 'Validasi berhasil' };
+}
+
+// ⭐⭐ BARU: Handler untuk Buat Posisi Baru ⭐⭐
+async function handleNewPosition() {
+    const kodeSaham = document.getElementById('kodeSaham').value.toUpperCase();
+    const tanggalMasuk = document.getElementById('tanggalMasuk').value;
+    const lot = parseInt(document.getElementById('lot').value);
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value);
+    const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+    
+    const positionId = generatePositionId(kodeSaham);
+    
+    // Hitung fee otomatis jika kosong
+    let finalFeeBuy = feeBuy;
+    if (!feeBuy || feeBuy === 0) {
+        const autoFee = calculateAutoFee(hargaMasuk, hargaMasuk, lot); // hargaKeluar sama dengan hargaMasuk untuk perhitungan fee
+        finalFeeBuy = autoFee.feeBuy;
+    }
+    
+    return {
+        id: generateId(),
+        tanggalMasuk: tanggalMasuk,
+        tanggalKeluar: '', // Kosong untuk entry
+        kodeSaham: kodeSaham,
+        hargaMasuk: hargaMasuk,
+        hargaKeluar: 0, // 0 untuk entry
+        lot: lot,
+        feeBuy: finalFeeBuy,
+        feeSell: 0, // 0 untuk entry
+        totalFee: finalFeeBuy,
+        profitLoss: 0, // 0 untuk entry
+        metodeTrading: document.getElementById('metodeTrading').value || 'Average Down',
+        catatan: document.getElementById('catatan').value || `Buat posisi baru - ${kodeSaham}`,
+        positionData: {
+            positionId: positionId,
+            transactionType: 'entry',
+            entryType: 'initial',
+            currentAvgPrice: hargaMasuk,
+            currentTotalLot: lot,
+            parentPosition: null
+        }
+    };
+}
+
+// ⭐⭐ BARU: Handler untuk Tambah ke Posisi Existing ⭐⭐
+async function handleAddToPosition() {
+    const selectedPosition = getSelectedPosition();
+    const tanggalMasuk = document.getElementById('tanggalMasuk').value;
+    const lot = parseInt(document.getElementById('lot').value);
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value);
+    const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+    
+    // Hitung average price baru
+    const newTotalLot = selectedPosition.totalLot + lot;
+    const newTotalValue = (selectedPosition.totalLot * 100 * selectedPosition.averagePrice) + (lot * 100 * hargaMasuk);
+    const newAveragePrice = Math.round(newTotalValue / (newTotalLot * 100));
+    
+    // Hitung fee otomatis jika kosong
+    let finalFeeBuy = feeBuy;
+    if (!feeBuy || feeBuy === 0) {
+        const autoFee = calculateAutoFee(hargaMasuk, hargaMasuk, lot);
+        finalFeeBuy = autoFee.feeBuy;
+    }
+    
+    return {
+        id: generateId(),
+        tanggalMasuk: tanggalMasuk,
+        tanggalKeluar: '',
+        kodeSaham: selectedPosition.kodeSaham,
+        hargaMasuk: hargaMasuk,
+        hargaKeluar: 0,
+        lot: lot,
+        feeBuy: finalFeeBuy,
+        feeSell: 0,
+        totalFee: finalFeeBuy,
+        profitLoss: 0,
+        metodeTrading: document.getElementById('metodeTrading').value || 'Average Down',
+        catatan: document.getElementById('catatan').value || `Average down - ${selectedPosition.kodeSaham}`,
+        positionData: {
+            positionId: selectedPosition.id,
+            transactionType: 'entry',
+            entryType: 'average_down',
+            currentAvgPrice: newAveragePrice,
+            currentTotalLot: newTotalLot,
+            parentPosition: selectedPosition.id
+        }
+    };
+}
+
+// ⭐⭐ BARU: Handler untuk Tutup Posisi ⭐⭐
+async function handleClosePosition() {
+    const selectedPosition = getSelectedPosition();
+    const tanggalKeluar = document.getElementById('tanggalKeluar').value;
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value);
+    const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+    
+    // Hitung profit/loss
+    const profitLoss = calculatePositionProfitLoss(selectedPosition, hargaKeluar, selectedPosition.totalLot);
+    
+    // Hitung fee otomatis jika kosong
+    let finalFeeSell = feeSell;
+    if (!feeSell || feeSell === 0) {
+        const totalSellValue = selectedPosition.totalLot * 100 * hargaKeluar;
+        finalFeeSell = Math.round(totalSellValue * (0.25132 / 100));
+    }
+    
+    return {
+        id: generateId(),
+        tanggalMasuk: selectedPosition.entries[0].tanggal, // Tanggal posisi dibuat
+        tanggalKeluar: tanggalKeluar,
+        kodeSaham: selectedPosition.kodeSaham,
+        hargaMasuk: selectedPosition.averagePrice, // Average price
+        hargaKeluar: hargaKeluar,
+        lot: selectedPosition.totalLot,
+        feeBuy: selectedPosition.totalFeeBuy, // Total fee beli dari semua entries
+        feeSell: finalFeeSell,
+        totalFee: selectedPosition.totalFeeBuy + finalFeeSell,
+        profitLoss: profitLoss,
+        metodeTrading: document.getElementById('metodeTrading').value || 'Average Down',
+        catatan: document.getElementById('catatan').value || `Tutup posisi - ${selectedPosition.kodeSaham}`,
+        positionData: {
+            positionId: selectedPosition.id,
+            transactionType: 'exit',
+            exitType: 'full',
+            avgPrice: selectedPosition.averagePrice,
+            totalLot: selectedPosition.totalLot,
+            parentPosition: selectedPosition.id
+        }
+    };
+}
+
+// ⭐⭐ BARU: Handler untuk Partial Exit ⭐⭐
+async function handlePartialExit() {
+    const selectedPosition = getSelectedPosition();
+    const tanggalKeluar = document.getElementById('tanggalKeluar').value;
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value);
+    const partialLot = parseInt(document.getElementById('partialLot').value);
+    const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+    
+    // Hitung profit/loss untuk partial exit
+    const profitLoss = calculatePositionProfitLoss(selectedPosition, hargaKeluar, partialLot);
+    
+    // Hitung allocated fee buy
+    const allocatedFeeBuy = (partialLot / selectedPosition.totalLot) * selectedPosition.totalFeeBuy;
+    
+    // Hitung fee otomatis jika kosong
+    let finalFeeSell = feeSell;
+    if (!feeSell || feeSell === 0) {
+        const totalSellValue = partialLot * 100 * hargaKeluar;
+        finalFeeSell = Math.round(totalSellValue * (0.25132 / 100));
+    }
+    
+    return {
+        id: generateId(),
+        tanggalMasuk: selectedPosition.entries[0].tanggal,
+        tanggalKeluar: tanggalKeluar,
+        kodeSaham: selectedPosition.kodeSaham,
+        hargaMasuk: selectedPosition.averagePrice,
+        hargaKeluar: hargaKeluar,
+        lot: partialLot,
+        feeBuy: Math.round(allocatedFeeBuy),
+        feeSell: finalFeeSell,
+        totalFee: Math.round(allocatedFeeBuy) + finalFeeSell,
+        profitLoss: profitLoss,
+        metodeTrading: document.getElementById('metodeTrading').value || 'Average Down',
+        catatan: document.getElementById('catatan').value || `Partial exit ${partialLot} lot - ${selectedPosition.kodeSaham}`,
+        positionData: {
+            positionId: selectedPosition.id,
+            transactionType: 'exit',
+            exitType: 'partial',
+            avgPrice: selectedPosition.averagePrice,
+            totalLot: partialLot,
+            remainingLot: selectedPosition.totalLot - partialLot,
+            parentPosition: selectedPosition.id
+        }
+    };
 }
 
 // Format currency (Rupiah)
@@ -1623,6 +1937,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
