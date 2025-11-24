@@ -510,7 +510,7 @@ function openEditModal(id) {
     document.getElementById('editLot').value = data.lot;
     document.getElementById('editFeeBuy').value = data.feeBuy;
     document.getElementById('editFeeSell').value = data.feeSell;
-    document.getElementById('editTotalFee').value = data.totalFee;
+    //document.getElementById('editTotalFee').value = data.totalFee;
     document.getElementById('editMetodeTrading').value = data.metodeTrading;
     document.getElementById('editCatatan').value = data.catatan || '';
     
@@ -1027,6 +1027,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
