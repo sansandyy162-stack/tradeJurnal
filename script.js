@@ -321,7 +321,7 @@ function calculateAutoFeeForEdit() {
         document.getElementById('editFeeSell').value = autoFee.feeSell;
         document.getElementById('editTotalFee').value = autoFee.totalFee;
         
-        //updateEditProfitPreview();
+     
         
         alert(`Fee otomatis telah dihitung:\nFee Beli: ${formatCurrency(autoFee.feeBuy)}\nFee Jual: ${formatCurrency(autoFee.feeSell)}\nTotal Fee: ${formatCurrency(autoFee.totalFee)}`);
     } else {
@@ -515,7 +515,7 @@ function openEditModal(id) {
     document.getElementById('editCatatan').value = data.catatan || '';
     
     // Update profit preview
-    //updateEditProfitPreview();
+  
     
     // Tampilkan modal
     const modal = document.getElementById('editModal');
@@ -1027,6 +1027,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
