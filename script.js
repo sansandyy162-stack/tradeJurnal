@@ -866,7 +866,7 @@ async function handleFormSubmit(event) {
             totalFee: calculation.totalFee,
             profitLoss: calculation.profitLoss,
             metodeTrading: document.getElementById('metodeTrading').value,
-            catatan: document.getElementById('catatan').value
+            catatan: document.getElementById('catatan').value,
             positionData: null
         };
         
@@ -1073,7 +1073,7 @@ async function handleEditSubmit(event) {
         totalFee: calculation.totalFee,
         profitLoss: calculation.profitLoss,
         metodeTrading: document.getElementById('editMetodeTrading').value,
-        catatan: document.getElementById('editCatatan').value
+        catatan: document.getElementById('editCatatan').value,
         positionData: null
     };
     
@@ -1596,6 +1596,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
