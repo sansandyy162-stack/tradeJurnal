@@ -463,11 +463,10 @@ function handlePositionSelection(positionId) {
     
     // Update partial exit info
     if (partialLotInput && positionType === 'partial') {
-        partialLotInput.max = position.totalLot;
-        totalAvailableLot.textContent = position.totalLot;
-        partialLotInput.value = Math.min(1, position.totalLot);
+        partialLotInput.max = position.remainingLot || position.totalLot;
+        totalAvailableLot.textContent = position.remainingLot || position.totalLot; // ✅ Tampilkan sisa lot
+        partialLotInput.value = Math.min(1, position.remainingLot || position.totalLot);
     }
-    
     updatePositionPreview();
 }
 
@@ -2140,6 +2139,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
