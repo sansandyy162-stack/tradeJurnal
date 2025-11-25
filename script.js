@@ -295,7 +295,7 @@ function handlePositionTypeChange(positionType) {
     updatePositionPreview();
 }
 
-// ⭐⭐ BARU: Fungsi untuk reset form fields ⭐⭐
+// ⭐⭐ PERBAIKI: resetFormFields() - RESET YANG BENAR ⭐⭐
 function resetFormFields() {
     const allGroups = [
         document.querySelector('label[for="tanggalMasuk"]').parentElement,
@@ -312,8 +312,20 @@ function resetFormFields() {
         if (group) group.style.display = 'block';
     });
     
+    // Reset nilai field
+    document.getElementById('kodeSaham').value = '';
+    document.getElementById('kodeSaham').readOnly = false;
+    document.getElementById('hargaMasuk').value = '';
+    document.getElementById('hargaMasuk').readOnly = false;
+    document.getElementById('lot').value = '1'; // ✅ SET DEFAULT 1
+    document.getElementById('lot').readOnly = false;
+    document.getElementById('hargaKeluar').value = '';
+    document.getElementById('feeBuy').value = '';
+    document.getElementById('feeSell').value = '';
+    
     // Reset partial exit container
     document.getElementById('partialExitContainer').style.display = 'none';
+    document.getElementById('partialLot').value = '1'; // ✅ SET DEFAULT 1
 }
 
 
@@ -1214,24 +1226,62 @@ async function handlePositionFormSubmit(positionType) {
     }
 }
 
-// ⭐⭐ BARU: Validasi Form Position ⭐⭐
+// ⭐⭐ PERBAIKI: validatePositionForm() - FIX VALIDATION FOR PARTIAL EXIT ⭐⭐
 function validatePositionForm(positionType) {
     const kodeSaham = document.getElementById('kodeSaham').value;
-    const lot = parseInt(document.getElementById('lot').value) || 0;
-    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
-    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
-    const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+    
+    // ✅ VALIDASI BERDASARKAN JENIS TRANSAKSI
+    switch(positionType) {
+        case 'new':
+        case 'add':
+            // Untuk beli, validasi lot biasa
+            const lot = parseInt(document.getElementById('lot').value) || 0;
+            if (lot < 1) {
+                return { isValid: false, message: 'Jumlah LOT minimal 1!' };
+            }
+            break;
+            
+        case 'partial':
+            // Untuk partial exit, validasi partialLot
+            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
+            if (partialLot < 1) {
+                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
+            }
+            break;
+            
+        case 'close':
+            // Untuk close position, lot sudah auto-filled (tidak perlu validasi khusus)
+            break;
+    }
     
     // Validasi umum
     if (!kodeSaham) {
         return { isValid: false, message: 'Kode Saham harus diisi!' };
     }
     
-    if (lot < 1) {
-        return { isValid: false, message: 'Jumlah LOT minimal 1!' };
+    // Validasi untuk transaksi existing
+    if (positionType === 'add' || positionType === 'close' || positionType === 'partial') {
+        const selectedPosition = getSelectedPosition();
+        if (!selectedPosition) {
+            return { isValid: false, message: 'Pilih posisi terlebih dahulu!' };
+        }
+        
+        // Validasi khusus partial exit
+        if (positionType === 'partial') {
+            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
+            if (partialLot < 1) {
+                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
+            }
+            if (partialLot > selectedPosition.remainingLot) {
+                return { isValid: false, message: `Jumlah LOT jual tidak boleh lebih dari ${selectedPosition.remainingLot} lot!` };
+            }
+        }
     }
     
-    // Validasi berdasarkan jenis transaksi
+    // Validasi harga berdasarkan jenis transaksi
+    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+    
     switch(positionType) {
         case 'new':
         case 'add':
@@ -1246,25 +1296,6 @@ function validatePositionForm(positionType) {
                 return { isValid: false, message: 'Harga Jual harus diisi!' };
             }
             break;
-    }
-    
-    // Validasi untuk transaksi existing
-    if (positionType === 'add' || positionType === 'close' || positionType === 'partial') {
-        const selectedPosition = getSelectedPosition();
-        if (!selectedPosition) {
-            return { isValid: false, message: 'Pilih posisi terlebih dahulu!' };
-        }
-        
-        // Validasi partial exit
-        if (positionType === 'partial') {
-            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
-            if (partialLot < 1) {
-                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
-            }
-            if (partialLot > selectedPosition.totalLot) {
-                return { isValid: false, message: `Jumlah LOT jual tidak boleh lebih dari ${selectedPosition.totalLot} lot!` };
-            }
-        }
     }
     
     return { isValid: true, message: 'Validasi berhasil' };
@@ -2139,6 +2170,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
