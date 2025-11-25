@@ -274,6 +274,9 @@ function handlePositionTypeChange(positionType) {
             break;
             
         case 'close': // Jual - Tutup Posisi
+            tanggalMasukGroup.style.display = 'none';
+            hargaMasukGroup.style.display = 'none';
+            feeBuyGroup.style.display = 'none';
             existingPositionsContainer.style.display = 'block';
             populateExistingPositions('open');
             break;
@@ -380,9 +383,13 @@ function handlePositionSelection(positionId) {
     document.getElementById('kodeSaham').readOnly = true;
     
     // ✅ AUTO-FILL HARGA MASUK untuk partial/close exit (harga rata-rata)
-    if (positionType === 'partial' || positionType === 'close') {
+    if (positionType === 'partial') {
         document.getElementById('hargaMasuk').value = position.averagePrice || '';
         document.getElementById('hargaMasuk').readOnly = true;
+    } else if (positionType === 'close') {
+       // Auto-fill LOT dengan remaining lot (readonly)
+        document.getElementById('lot').value = position.remainingLot || position.totalLot;
+        document.getElementById('lot').readOnly = true;
     }
     
     // Update position info
@@ -2029,6 +2036,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
