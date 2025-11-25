@@ -317,6 +317,7 @@ function resetFormFields() {
 }
 
 
+// ⭐⭐ PERBAIKI: populateExistingPositions() - BETTER FILTERING ⭐⭐
 function populateExistingPositions(status = 'open') {
     const existingPositions = document.getElementById('existingPositions');
     const positionInfo = document.getElementById('positionInfo');
@@ -326,37 +327,76 @@ function populateExistingPositions(status = 'open') {
     existingPositions.innerHTML = '<option value="">-- Pilih Posisi --</option>';
     positionInfo.style.display = 'none';
     
-    // Reset kodeSaham field
+    // Reset form fields
     document.getElementById('kodeSaham').value = '';
     document.getElementById('kodeSaham').readOnly = false;
+    document.getElementById('lot').value = '';
+    document.getElementById('lot').readOnly = false;
     
     // Rebuild positions dari trading data
     const positions = rebuildPositionsFromData();
-    const openPositions = Object.values(positions).filter(pos => pos.status === status);
     
-    if (openPositions.length === 0) {
+    // ✅ FILTER YANG LEBIH AKURAT: 
+    // Tampilkan posisi yang status open DAN ada remaining lot > 0
+    const availablePositions = Object.values(positions).filter(pos => {
+        const hasRemainingLot = pos.remainingLot > 0;
+        const isOpenStatus = pos.status === 'open';
+        
+        console.log(`🔍 Filtering: ${pos.kodeSaham}`, {
+            status: pos.status,
+            remainingLot: pos.remainingLot,
+            hasRemainingLot: hasRemainingLot,
+            isOpenStatus: isOpenStatus,
+            shouldShow: hasRemainingLot && isOpenStatus
+        });
+        
+        return hasRemainingLot && isOpenStatus;
+    });
+    
+    console.log(`📋 Available positions: ${availablePositions.length}`);
+    
+    if (availablePositions.length === 0) {
         existingPositions.innerHTML = '<option value="">Tidak ada posisi open</option>';
+        
+        // ✅ DEBUG: Tampilkan kenapa tidak ada posisi
+        const allPositions = Object.values(positions);
+        console.log('🔍 All positions debug:', allPositions.map(p => ({
+            kodeSaham: p.kodeSaham,
+            status: p.status,
+            totalLot: p.totalLot,
+            remainingLot: p.remainingLot
+        })));
+        
         return;
     }
     
-    openPositions.forEach(position => {
+    availablePositions.forEach(position => {
         const option = document.createElement('option');
         option.value = position.id;
-        option.textContent = `${position.kodeSaham} - ${position.totalLot} lot @ ${formatCurrency(position.averagePrice)}`;
         
-        // ✅ PAKAI KODE BARU - Pastikan kodeSaham selalu ada
+        // ✅ TAMPILKAN INFO YANG JELAS: Sisa lot / Total lot
+        const lotInfo = position.remainingLot === position.totalLot ? 
+            `${position.totalLot} lot` : 
+            `${position.remainingLot}/${position.totalLot} lot`;
+            
+        option.textContent = `${position.kodeSaham} - ${lotInfo} @ ${formatCurrency(position.averagePrice)}`;
+        
         option.setAttribute('data-position', JSON.stringify({
             id: position.id,
-            kodeSaham: position.kodeSaham, // ✅ INI YANG PENTING
+            kodeSaham: position.kodeSaham,
             averagePrice: position.averagePrice,
             totalLot: position.totalLot,
+            remainingLot: position.remainingLot, // ✅ PASTIKAN ini ada
             totalInvestment: position.totalInvestment,
             totalFeeBuy: position.totalFeeBuy,
-            entries: position.entries || []
+            entries: position.entries || [],
+            exits: position.exits || []
         }));
         
         existingPositions.appendChild(option);
     });
+    
+    console.log(`✅ Populated ${availablePositions.length} positions to dropdown`);
 }
 
 // ⭐⭐ BARU: Handle ketika user memilih posisi existing ⭐⭐
@@ -631,14 +671,15 @@ function serializePositionData(positionData) {
 }
 
 
-// ⭐⭐ BARU: Rebuild positions dari PositionData ⭐⭐
+// ⭐⭐ PERBAIKI BESAR: rebuildPositionsFromData() - FIX REMAINING LOT ⭐⭐
 function rebuildPositionsFromData() {
     console.log('🔄 Rebuilding positions from PositionData...');
     
     const positions = {};
     
+    // PHASE 1: Process semua ENTRIES terlebih dahulu
     tradingData.forEach(trade => {
-        if (trade.positionData && trade.positionData.positionId) {
+        if (trade.positionData && trade.positionData.positionId && trade.positionData.transactionType === 'entry') {
             const positionId = trade.positionData.positionId;
             
             if (!positions[positionId]) {
@@ -647,50 +688,93 @@ function rebuildPositionsFromData() {
                     kodeSaham: trade.kodeSaham,
                     status: 'open',
                     entries: [],
+                    exits: [], // ✅ BARU: Track exits
                     totalLot: 0,
                     totalFeeBuy: 0,
                     averagePrice: 0,
-                    totalInvestment: 0
+                    totalInvestment: 0,
+                    remainingLot: 0 // ✅ Initialize
                 };
             }
             
-            // Add entry atau exit berdasarkan transactionType
-            if (trade.positionData.transactionType === 'entry') {
-                positions[positionId].entries.push({
-                    id: trade.id,
-                    tanggal: trade.tanggalMasuk,
-                    lot: trade.lot,
-                    harga: trade.hargaMasuk,
-                    fee: trade.feeBuy
-                });
-                
-                positions[positionId].totalLot += trade.lot;
-                positions[positionId].totalFeeBuy += trade.feeBuy;
-                
-                // Recalculate average price
-                const totalShares = positions[positionId].entries.reduce((sum, entry) => 
-                    sum + (entry.lot * 100 * entry.harga), 0);
-                const totalLot = positions[positionId].entries.reduce((sum, entry) => 
-                    sum + entry.lot, 0);
-                
-                positions[positionId].averagePrice = totalLot > 0 ? 
-                    Math.round(totalShares / (totalLot * 100)) : 0;
-                positions[positionId].totalInvestment = totalShares + positions[positionId].totalFeeBuy;
-                
-            } else if (trade.positionData.transactionType === 'exit') {
+            // Process entry
+            positions[positionId].entries.push({
+                id: trade.id,
+                tanggal: trade.tanggalMasuk,
+                lot: trade.lot,
+                harga: trade.hargaMasuk,
+                fee: trade.feeBuy
+            });
+            
+            positions[positionId].totalLot += trade.lot;
+            positions[positionId].totalFeeBuy += trade.feeBuy;
+            positions[positionId].remainingLot += trade.lot; // ✅ Tambah remaining lot
+        }
+    });
+    
+    // PHASE 2: Process semua EXITS
+    tradingData.forEach(trade => {
+        if (trade.positionData && trade.positionData.positionId && trade.positionData.transactionType === 'exit') {
+            const positionId = trade.positionData.positionId;
+            
+            if (!positions[positionId]) {
+                console.warn(`❌ Exit transaction for unknown position: ${positionId}`);
+                return;
+            }
+            
+            const exitLot = trade.lot;
+            
+            // Process exit
+            positions[positionId].exits.push({
+                id: trade.id,
+                tanggal: trade.tanggalKeluar,
+                lot: exitLot,
+                hargaKeluar: trade.hargaKeluar,
+                feeSell: trade.feeSell,
+                profitLoss: trade.profitLoss
+            });
+            
+            // ✅ KURANGI remainingLot
+            positions[positionId].remainingLot -= exitLot;
+            
+            // Update status berdasarkan remainingLot
+            if (positions[positionId].remainingLot <= 0) {
                 positions[positionId].status = 'closed';
-                positions[positionId].exit = {
-                    tanggal: trade.tanggalKeluar,
-                    hargaKeluar: trade.hargaKeluar,
-                    lot: trade.lot,
-                    feeSell: trade.feeSell,
-                    profitLoss: trade.profitLoss
-                };
+                positions[positionId].remainingLot = 0; // Pastikan tidak minus
+            } else {
+                positions[positionId].status = 'open';
             }
         }
     });
     
+    // PHASE 3: Calculate average price untuk semua positions
+    Object.values(positions).forEach(position => {
+        if (position.entries.length > 0) {
+            const totalShares = position.entries.reduce((sum, entry) => 
+                sum + (entry.lot * 100 * entry.harga), 0);
+            const totalLot = position.entries.reduce((sum, entry) => 
+                sum + entry.lot, 0);
+            
+            position.averagePrice = totalLot > 0 ? 
+                Math.round(totalShares / (totalLot * 100)) : 0;
+            position.totalInvestment = totalShares + position.totalFeeBuy;
+        }
+    });
+    
     console.log('✅ Rebuilt positions:', Object.keys(positions).length);
+    
+    // ✅ DEBUG DETAIL: Log semua positions dengan info lengkap
+    Object.values(positions).forEach(pos => {
+        console.log(`📊 Position: ${pos.id} (${pos.kodeSaham})`, {
+            status: pos.status,
+            totalLot: pos.totalLot,
+            remainingLot: pos.remainingLot,
+            entries: pos.entries.length,
+            exits: pos.exits.length,
+            averagePrice: pos.averagePrice
+        });
+    });
+    
     return positions;
 }
 // Fungsi untuk load data dari Google Apps Script
@@ -2036,6 +2120,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
