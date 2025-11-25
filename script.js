@@ -443,8 +443,12 @@ function handlePositionSelection(positionId) {
             <span>${formatCurrency(position.averagePrice)}</span>
         </div>
         <div class="position-info-item">
-            <span>Total Lot:</span>
+            <span>Total Lot Awal:</span>
             <span>${position.totalLot}</span>
+        </div>
+        <div class="position-info-item">
+            <span>Sisa Lot Saat Ini:</span>
+            <span><strong>${position.remainingLot || position.totalLot} lot</strong></span>
         </div>
         <div class="position-info-item">
             <span>Total Investasi:</span>
@@ -552,28 +556,44 @@ function getExitPositionPreview() {
     } else {
         exitLot = selectedPosition.totalLot;
     }
+
+     // ✅ HITUNG SISA LOT SETELAH EXIT
+    const sisaLotSetelahExit = (selectedPosition.remainingLot || selectedPosition.totalLot) - exitLot;
     
     // Calculate profit/loss
     const profitLoss = calculatePositionProfitLoss(selectedPosition, hargaKeluar, exitLot);
     
     let previewHTML = `
         <div class="preview-item">
-            <span class="preview-label">Exit dari:</span>
-            <span class="preview-value">${exitLot} lot dari ${selectedPosition.totalLot} lot</span>
+            <span class="preview-label">Jenis Exit:</span>
+            <span class="preview-value">${positionType === 'partial' ? 'Partial Exit' : 'Full Exit'}</span>
         </div>
         <div class="preview-item">
-            <span class="preview-label">Harga Rata:</span>
+            <span class="preview-label">Lot yang Dijual:</span>
+            <span class="preview-value">${exitLot} lot</span>
+        </div>
+        <div class="preview-item">
+            <span class="preview-label">Sisa Lot Setelah Exit:</span>
+            <span class="preview-value"><strong>${sisaLotSetelahExit} lot</strong></span>
+        </div>
+        <div class="preview-item">
+            <span class="preview-label">Harga Rata Beli:</span>
             <span class="preview-value">${formatCurrency(selectedPosition.averagePrice)}</span>
         </div>
-        <div class="preview-item">
-            <span class="preview-label">Harga Jual:</span>
-            <span class="preview-value">${formatCurrency(hargaKeluar)}</span>
-        </div>
-        <div class="preview-item">
-            <span class="preview-label">Estimasi P/L:</span>
-            <span class="preview-value ${profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(profitLoss)}</span>
-        </div>
     `;
+
+    if (hargaKeluar > 0) {
+        previewHTML += `
+            <div class="preview-item">
+                <span class="preview-label">Harga Jual:</span>
+                <span class="preview-value">${formatCurrency(hargaKeluar)}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Estimasi P/L:</span>
+                <span class="preview-value ${profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(profitLoss)}</span>
+            </div>
+        `;
+    }
     
     return previewHTML;
 }
@@ -2120,6 +2140,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
