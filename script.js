@@ -1143,9 +1143,15 @@ async function handleRegularFormSubmit() {
 
 // ⭐⭐ BARU: Handle Position Trading Submit ⭐⭐
 async function handlePositionFormSubmit(positionType) {
+
+     console.log('🚀 SUBMITTING POSITION FORM:', positionType);
+    
     // Validasi berdasarkan jenis transaksi
     const validation = validatePositionForm(positionType);
+    console.log('📋 VALIDATION RESULT:', validation);
+    
     if (!validation.isValid) {
+        console.log('❌ VALIDATION FAILED:', validation.message);
         alert(validation.message);
         return;
     }
@@ -1226,78 +1232,80 @@ async function handlePositionFormSubmit(positionType) {
     }
 }
 
-// ⭐⭐ PERBAIKI: validatePositionForm() - FIX VALIDATION FOR PARTIAL EXIT ⭐⭐
+// ⭐⭐ PERBAIKI TOTAL: Validasi Form Position ⭐⭐
 function validatePositionForm(positionType) {
+    console.log('🔍 Validating form for:', positionType);
+    
+    // Validasi umum - kode saham
     const kodeSaham = document.getElementById('kodeSaham').value;
-    
-    // ✅ VALIDASI BERDASARKAN JENIS TRANSAKSI
-    switch(positionType) {
-        case 'new':
-        case 'add':
-            // Untuk beli, validasi lot biasa
-            const lot = parseInt(document.getElementById('lot').value) || 0;
-            if (lot < 1) {
-                return { isValid: false, message: 'Jumlah LOT minimal 1!' };
-            }
-            break;
-            
-        case 'partial':
-            // Untuk partial exit, validasi partialLot
-            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
-            if (partialLot < 1) {
-                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
-            }
-            break;
-            
-        case 'close':
-            // Untuk close position, lot sudah auto-filled (tidak perlu validasi khusus)
-            break;
-    }
-    
-    // Validasi umum
     if (!kodeSaham) {
         return { isValid: false, message: 'Kode Saham harus diisi!' };
     }
-    
-    // Validasi untuk transaksi existing
-    if (positionType === 'add' || positionType === 'close' || positionType === 'partial') {
-        const selectedPosition = getSelectedPosition();
-        if (!selectedPosition) {
-            return { isValid: false, message: 'Pilih posisi terlebih dahulu!' };
-        }
-        
-        // Validasi khusus partial exit
-        if (positionType === 'partial') {
-            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
-            if (partialLot < 1) {
-                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
-            }
-            if (partialLot > selectedPosition.remainingLot) {
-                return { isValid: false, message: `Jumlah LOT jual tidak boleh lebih dari ${selectedPosition.remainingLot} lot!` };
-            }
-        }
-    }
-    
-    // Validasi harga berdasarkan jenis transaksi
-    const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
-    const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value) || 0;
-    
+
+    // ✅ VALIDASI SPESIFIK BERDASARKAN JENIS TRANSAKSI
     switch(positionType) {
         case 'new':
         case 'add':
+            // Validasi untuk BELI
+            const lotBeli = parseInt(document.getElementById('lot').value) || 0;
+            const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value) || 0;
+            
+            console.log('🛒 Beli - Lot:', lotBeli, 'Harga:', hargaMasuk);
+            
+            if (lotBeli < 1) {
+                return { isValid: false, message: 'Jumlah LOT minimal 1!' };
+            }
             if (hargaMasuk <= 0) {
                 return { isValid: false, message: 'Harga Beli harus diisi!' };
             }
             break;
             
         case 'close':
+            // Validasi untuk TUTUP POSISI
+            const hargaKeluarClose = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+            
+            console.log('📤 Close - Harga Keluar:', hargaKeluarClose);
+            
+            if (hargaKeluarClose <= 0) {
+                return { isValid: false, message: 'Harga Jual harus diisi!' };
+            }
+            break;
+            
         case 'partial':
-            if (hargaKeluar <= 0) {
+            // Validasi untuk PARTIAL EXIT
+            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
+            const hargaKeluarPartial = parseFloat(document.getElementById('hargaKeluar').value) || 0;
+            
+            console.log('🔁 Partial - Partial Lot:', partialLot, 'Harga Keluar:', hargaKeluarPartial);
+            
+            if (partialLot < 1) {
+                return { isValid: false, message: 'Jumlah LOT jual minimal 1!' };
+            }
+            if (hargaKeluarPartial <= 0) {
                 return { isValid: false, message: 'Harga Jual harus diisi!' };
             }
             break;
     }
-    
+
+    // Validasi untuk transaksi existing (add/close/partial)
+    if (positionType === 'add' || positionType === 'close' || positionType === 'partial') {
+        const selectedPosition = getSelectedPosition();
+        if (!selectedPosition) {
+            return { isValid: false, message: 'Pilih posisi terlebih dahulu!' };
+        }
+        
+        console.log('📊 Selected Position:', selectedPosition.kodeSaham, 'Remaining Lot:', selectedPosition.remainingLot);
+        
+        // Validasi khusus partial exit
+        if (positionType === 'partial') {
+            const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
+            if (partialLot > selectedPosition.remainingLot) {
+                return { isValid: false, message: `Jumlah LOT jual tidak boleh lebih dari ${selectedPosition.remainingLot} lot!` };
+            }
+        }
+    }
+
+    console.log('✅ Validation passed for:', positionType);
     return { isValid: true, message: 'Validasi berhasil' };
 }
 
@@ -2170,6 +2178,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
