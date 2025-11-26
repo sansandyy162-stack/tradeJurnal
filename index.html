@@ -411,9 +411,60 @@
             <button class="notification-btn" id="notificationBtn">OK</button>
         </div>
     </div>
+        <!-- Loading Modal -->
+    <div id="loadingModal" class="loading-modal">
+        <div class="loading-content" id="loadingContent">
+            <div class="loading-icon">
+                <div class="loading-spinner-large" id="loadingSpinner"></div>
+                <div class="loading-success" id="loadingSuccess" style="display: none;">✅</div>
+                <div class="loading-error" id="loadingError" style="display: none;">❌</div>
+            </div>
+            
+            <h3 id="loadingTitle">Memuat Data Trading</h3>
+            <p id="loadingMessage">Sedang mengambil data dari Google Sheets...</p>
+            
+            <div class="loading-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <span class="progress-text" id="progressText">0%</span>
+            </div>
+            
+            <div class="loading-details">
+                <div class="loading-item">
+                    <span class="loading-label">Status:</span>
+                    <span class="loading-value" id="loadingStatus">Menyiapkan aplikasi...</span>
+                </div>
+                <div class="loading-item">
+                    <span class="loading-label">Data Loaded:</span>
+                    <span class="loading-value" id="dataLoaded">0 records</span>
+                </div>
+                <div class="loading-item">
+                    <span class="loading-label">Pending Data:</span>
+                    <span class="loading-value" id="pendingData">0 records</span>
+                </div>
+            </div>
+            
+            <!-- Error Section (hidden by default) -->
+            <div class="error-section" id="errorSection" style="display: none;">
+                <div class="error-message" id="errorMessage"></div>
+                <div class="error-actions">
+                    <button class="retry-btn" id="retryBtn">🔄 Coba Lagi</button>
+                    <button class="continue-btn" id="continueBtn">🚀 Lanjutkan Anyway</button>
+                </div>
+            </div>
+            
+            <!-- Success Section (hidden by default) -->
+            <div class="success-section" id="successSection" style="display: none;">
+                <button class="success-btn" id="successBtn">🎉 Mulai Trading!</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
