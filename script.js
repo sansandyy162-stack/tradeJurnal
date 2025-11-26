@@ -40,6 +40,8 @@ function addToPendingQueue(tradingRecord) {
     localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pendingData));
     
     console.log('📝 Added to pending queue:', pendingRecord.id);
+    // ✅ BARU: Update badge UI setelah menambah data
+    updatePendingBadge();
     return pendingRecord.id;
 }
 
@@ -64,27 +66,48 @@ function testPendingSystem() {
 function setupAutoSync() {
     console.log('🔧 Setting up auto-sync system...');
     
-    // Remove existing listeners first (avoid duplicates)
+    // Remove existing listeners first
     window.removeEventListener('online', handleOnlineEvent);
     window.removeEventListener('offline', handleOfflineEvent);
     
-    // Define event handlers
     function handleOnlineEvent() {
         console.log('🌐 Online detected - checking pending data...');
         const pendingData = getPendingData();
+        
         if (pendingData.pending_count > 0) {
-            console.log(`🔄 Found ${pendingData.pending_count} pending records - will sync in 3 seconds`);
+            console.log(`🔄 Found ${pendingData.pending_count} pending records - syncing now!`);
+            
+            // ✅ BARU: Tampilkan notifikasi bahwa sync akan dilakukan
+            showNotification(
+                'info',
+                '🔄 Sync Dimulai',
+                `Ditemukan ${pendingData.pending_count} data pending.\n\nMenyinkronisasi ke Google Sheets...`,
+                false
+            );
+            
+            // Sync immediately dengan delay kecil
             setTimeout(() => {
                 processPendingSync();
-            }, 3000);
+            }, 2000);
         } else {
             console.log('✅ No pending data to sync');
+            // ✅ BARU: Tampilkan status online saja
+            showNotification(
+                'success',
+                '🌐 Online',
+                'Koneksi internet tersedia.\n\nData baru akan langsung disimpan ke cloud.',
+                true
+            );
         }
+        
+        // ✅ BARU: Update status indicator
+        updateStatusIndicator();
     }
     
     function handleOfflineEvent() {
         console.log('📴 Offline mode - data will be saved locally');
         showOfflineNotification();
+        updateStatusIndicator();
     }
     
     // Add event listeners
@@ -93,6 +116,9 @@ function setupAutoSync() {
     
     console.log('✅ Auto-sync system ready');
     console.log('Current online status:', navigator.onLine ? '🌐 ONLINE' : '📴 OFFLINE');
+    
+    // ✅ BARU: Initial status update
+    updateStatusIndicator();
 }
 
 // REAL SYNC PROCESS (ganti simulation)
@@ -242,6 +268,59 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// ✅ PERBAIKAN 4: Manual sync button untuk testing
+function addManualSyncButton() {
+    // Cek jika button sudah ada
+    if (document.getElementById('manual-sync-btn')) return;
+    
+    const syncBtn = document.createElement('button');
+    syncBtn.id = 'manual-sync-btn';
+    syncBtn.innerHTML = '🔄 Sync Now';
+    syncBtn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #3498db, #2980b9);
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 9997;
+        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        display: none;
+    `;
+    
+    syncBtn.addEventListener('click', function() {
+        const pendingData = getPendingData();
+        if (pendingData.pending_count > 0) {
+            processPendingSync();
+        } else {
+            showNotification('info', 'ℹ️ Info', 'Tidak ada data pending yang perlu di-sync.', true);
+        }
+    });
+    
+    document.body.appendChild(syncBtn);
+}
+
+// ✅ PERBAIKAN 5: Update manual sync button visibility
+function updateManualSyncButton() {
+    const syncBtn = document.getElementById('manual-sync-btn');
+    const pendingData = getPendingData();
+    
+    if (syncBtn) {
+        if (pendingData.pending_count > 0 && !navigator.onLine) {
+            syncBtn.style.display = 'block';
+            syncBtn.innerHTML = `🔄 Sync ${pendingData.pending_count} Data`;
+        } else {
+            syncBtn.style.display = 'none';
+        }
+    }
+}
+
 function createPendingBadge() {
     // Cek jika badge sudah ada
     if (document.getElementById('pending-badge')) {
@@ -292,13 +371,22 @@ function updatePendingBadge() {
         countElement.textContent = pendingData.pending_count;
         badge.style.display = 'flex';
         
-        // Add different animation based on count
+        // Add tooltip dengan info lebih detail
+        badge.title = `${pendingData.pending_count} data pending menunggu sync\nKlik untuk detail`;
+        
+        // Animation based on count
         if (pendingData.pending_count > 3) {
             badge.style.animation = 'pulse 1s infinite';
             badge.style.background = 'linear-gradient(135deg, #e74c3c, #d35400)';
+        } else {
+            badge.style.animation = 'pulse 2s infinite';
+            badge.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
         }
+        
+        console.log(`📋 Pending badge updated: ${pendingData.pending_count} records`);
     } else {
         badge.style.display = 'none';
+        console.log('✅ No pending records - badge hidden');
     }
 }
 
@@ -315,10 +403,15 @@ function showPendingDetails() {
     
     pendingData.pending_records.forEach((record, index) => {
         const timeAgo = getTimeAgo(record.timestamp);
-        detailsHTML += `${index + 1}. ${record.data.kodeSaham} - ${record.data.lot} lot (${timeAgo})\n`;
+        const sahamInfo = record.data.kodeSaham ? `${record.data.kodeSaham} - ${record.data.lot} lot` : 'Data trading';
+        detailsHTML += `${index + 1}. ${sahamInfo} (${timeAgo})\n`;
     });
     
-    detailsHTML += `\nData akan otomatis sync ketika online.`;
+    detailsHTML += `\nStatus: ${navigator.onLine ? '🌐 ONLINE - Akan sync otomatis' : '📴 OFFLINE - Menunggu koneksi'}`;
+    
+    if (!navigator.onLine) {
+        detailsHTML += `\n\nKlik tombol "🔄 Sync Now" di pojok kanan bawah untuk sync manual.`;
+    }
     
     showNotification('warning', '⏳ Data Pending', detailsHTML, false);
 }
@@ -525,6 +618,7 @@ async function smartSaveData() {
         // Update UI
         updateHomeSummary();
         displayTradingData();
+        updateManualSyncButton();
         
         showOfflineSuccessNotification(pendingId);
         return { success: true, mode: 'offline', pendingId: pendingId };
@@ -836,17 +930,33 @@ async function initializeApp() {
     // ✅ PHASE 2: Setup UI enhancements
     setupStatusIndicator();
     createPendingBadge();
+    addManualSyncButton();
     
     // ✅ NEW: Check pending data on startup
     const pendingData = getPendingData();
     if (pendingData.pending_count > 0) {
         console.log(`📋 Found ${pendingData.pending_count} pending records from previous session`);
+
+        // ✅ BARU: Update UI components
+        updatePendingBadge();
+        updateManualSyncButton();
+        
         if (navigator.onLine) {
             console.log('🌐 Online - pending records will auto-sync on next save');
             // Tampilkan notifikasi ke user
             showStartupPendingNotification(pendingData.pending_count);
+             // ✅ BARU: Auto-sync setelah startup jika online
+            setTimeout(() => {
+                processPendingSync();
+            }, 5000);
         } else {
             console.log('📴 Offline - pending records waiting for connection');
+            showNotification(
+                'warning',
+                '📴 Mode Offline',
+                `Anda memiliki ${pendingData.pending_count} data pending dari session sebelumnya.\n\nData akan sync otomatis ketika online kembali.`,
+                true
+            );
         }
     }
 
@@ -874,6 +984,9 @@ async function initializeApp() {
     
     // Setup performance tabs
     setupPerformanceTabs();
+    // ✅ BARU: Final UI updates
+    updatePendingBadge();
+    updateManualSyncButton();
     
     console.log('=== APP INITIALIZATION COMPLETED ===');
 }
@@ -3038,6 +3151,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
