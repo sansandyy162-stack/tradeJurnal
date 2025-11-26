@@ -2,6 +2,191 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCfPqrevTfXAch4KogtXQGB4HssHLKanBRHPrH6G2Vl6K1gSqEOs02i/exec';
 
 // Variabel global
+// ✅ BARU: Loading Modal Management
+let loadingProgress = 0;
+let loadingInterval;
+
+// Show loading modal
+function showLoadingModal() {
+    const modal = document.getElementById('loadingModal');
+    const content = document.getElementById('loadingContent');
+    
+    // Reset state
+    resetLoadingModal();
+    
+    // Show modal
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // Start progress animation
+    startLoadingProgress();
+}
+
+// Hide loading modal
+function hideLoadingModal() {
+    const modal = document.getElementById('loadingModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+    
+    // Clear progress interval
+    if (loadingInterval) {
+        clearInterval(loadingInterval);
+    }
+}
+
+// Reset loading modal to initial state
+function resetLoadingModal() {
+    const spinner = document.getElementById('loadingSpinner');
+    const successIcon = document.getElementById('loadingSuccess');
+    const errorIcon = document.getElementById('loadingError');
+    const errorSection = document.getElementById('errorSection');
+    const successSection = document.getElementById('successSection');
+    const content = document.getElementById('loadingContent');
+    
+    // Reset icons
+    spinner.style.display = 'block';
+    successIcon.style.display = 'none';
+    errorIcon.style.display = 'none';
+    
+    // Reset sections
+    errorSection.style.display = 'none';
+    successSection.style.display = 'none';
+    
+    // Reset progress
+    updateLoadingProgress(0);
+    loadingProgress = 0;
+    
+    // Reset classes
+    content.className = 'loading-content';
+}
+
+// Update loading progress
+function updateLoadingProgress(percent, status = '') {
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const loadingStatus = document.getElementById('loadingStatus');
+    
+    progressFill.style.width = percent + '%';
+    progressText.textContent = percent + '%';
+    
+    if (status) {
+        loadingStatus.textContent = status;
+    }
+}
+
+// Start loading progress animation
+function startLoadingProgress() {
+    loadingProgress = 0;
+    
+    loadingInterval = setInterval(() => {
+        if (loadingProgress < 90) { // Stop at 90%, wait for actual completion
+            loadingProgress += Math.random() * 10;
+            if (loadingProgress > 90) loadingProgress = 90;
+            updateLoadingProgress(Math.floor(loadingProgress));
+        }
+    }, 300);
+}
+
+// Update loading details
+function updateLoadingDetails(records = 0, pending = 0) {
+    const dataLoaded = document.getElementById('dataLoaded');
+    const pendingData = document.getElementById('pendingData');
+    
+    dataLoaded.textContent = records + ' records';
+    pendingData.textContent = pending + ' records';
+}
+
+// Show loading success
+function showLoadingSuccess(message = 'Data berhasil dimuat!') {
+    const spinner = document.getElementById('loadingSpinner');
+    const successIcon = document.getElementById('loadingSuccess');
+    const successSection = document.getElementById('successSection');
+    const content = document.getElementById('loadingContent');
+    const loadingTitle = document.getElementById('loadingTitle');
+    const loadingMessage = document.getElementById('loadingMessage');
+    
+    // Update content
+    loadingTitle.textContent = 'Siap Trading!';
+    loadingMessage.textContent = message;
+    
+    // Switch to success state
+    spinner.style.display = 'none';
+    successIcon.style.display = 'block';
+    successSection.style.display = 'block';
+    content.classList.add('success-state');
+    
+    // Complete progress
+    updateLoadingProgress(100, 'Selesai');
+    
+    // Setup success button
+    const successBtn = document.getElementById('successBtn');
+    successBtn.onclick = hideLoadingModal;
+    
+    // Auto hide after 3 seconds
+    setTimeout(() => {
+        if (document.getElementById('loadingModal').style.display === 'flex') {
+            hideLoadingModal();
+        }
+    }, 3000);
+}
+
+// Show loading error
+function showLoadingError(errorMessage, retryCallback = null) {
+    const spinner = document.getElementById('loadingSpinner');
+    const errorIcon = document.getElementById('loadingError');
+    const errorSection = document.getElementById('errorSection');
+    const errorMessageEl = document.getElementById('errorMessage');
+    const content = document.getElementById('loadingContent');
+    const loadingTitle = document.getElementById('loadingTitle');
+    const loadingMessage = document.getElementById('loadingMessage');
+    
+    // Update content
+    loadingTitle.textContent = 'Gagal Memuat Data';
+    loadingMessage.textContent = 'Terjadi masalah saat memuat data trading.';
+    errorMessageEl.textContent = errorMessage;
+    
+    // Switch to error state
+    spinner.style.display = 'none';
+    errorIcon.style.display = 'block';
+    errorSection.style.display = 'block';
+    content.classList.add('error-state');
+    
+    // Stop progress
+    if (loadingInterval) {
+        clearInterval(loadingInterval);
+    }
+    updateLoadingProgress(0, 'Gagal');
+    
+    // Setup retry button
+    const retryBtn = document.getElementById('retryBtn');
+    const continueBtn = document.getElementById('continueBtn');
+    
+    retryBtn.onclick = function() {
+        if (retryCallback) {
+            resetLoadingModal();
+            startLoadingProgress();
+            retryCallback();
+        } else {
+            window.location.reload();
+        }
+    };
+    
+    continueBtn.onclick = function() {
+        hideLoadingModal();
+        showNotification('warning', '⚠️ Data Tidak Lengkap', 
+            'Aplikasi berjalan dengan data terbatas.\n\nBeberapa fitur mungkin tidak berfungsi optimal.', 
+            true
+        );
+    };
+}
+
+function updateLoadingStatus(status) {
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (loadingStatus) {
+        loadingStatus.textContent = status;
+    }
+}
+
 let tradingData = [];
 const PENDING_STORAGE_KEY = 'trading_pending_data';
 
@@ -1001,72 +1186,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function initializeApp() {
     console.log('=== INITIALIZING APP ===');
-
-    // ✅ NEW: Setup auto-sync system FIRST
-    setupAutoSync();
     
-    // ✅ PHASE 2: Setup UI enhancements
-    setupStatusIndicator();
-    createPendingBadge();
-    addManualSyncButton();
-    
-    // ✅ NEW: Check pending data on startup
-    const pendingData = getPendingData();
-    if (pendingData.pending_count > 0) {
-        console.log(`📋 Found ${pendingData.pending_count} pending records from previous session`);
+    // Show loading modal immediately
+    showLoadingModal();
+    setupLoadingModalEvents();
+    updateLoadingProgress(10, 'Menyiapkan aplikasi...');
 
-        // ✅ BARU: Update UI components
+    try {
+        // Setup systems
+        updateLoadingProgress(20, 'Menyiapkan sistem sync...');
+        setupAutoSync();
+        
+        updateLoadingProgress(30, 'Menyiapkan UI...');
+        setupStatusIndicator();
+        createPendingBadge();
+        addManualSyncButton();
+        
+        // Check pending data
+        const pendingData = getPendingData();
+        updateLoadingDetails(0, pendingData.pending_count);
+        
+        updateLoadingProgress(40, 'Memeriksa data pending...');
+        if (pendingData.pending_count > 0) {
+            console.log(`📋 Found ${pendingData.pending_count} pending records`);
+        }
+        
+        // Setup event listeners
+        updateLoadingProgress(50, 'Menyiapkan event listeners...');
+        setupEventListeners();
+        setupPositionTradingListeners();
+        
+        // Load data from Google Sheets
+        updateLoadingProgress(60, 'Mengambil data dari Google Sheets...');
+        console.log('Memuat data dari Google Sheets...');
+        
+        await loadData();
+        console.log('✅ Data load completed dari Google Sheets');
+        
+        updateLoadingProgress(80, 'Memproses data...');
+        updateLoadingDetails(tradingData.length, pendingData.pending_count);
+        
+        // Update displays
+        updateLoadingProgress(90, 'Menyiapkan tampilan...');
+        updateHomeSummary();
+        displayTradingData();
+        setupPerformanceTabs();
+        
+        // Final UI updates
         updatePendingBadge();
         updateManualSyncButton();
         
-        if (navigator.onLine) {
-            console.log('🌐 Online - pending records will auto-sync on next save');
-            // Tampilkan notifikasi ke user
-            showStartupPendingNotification(pendingData.pending_count);
-             // ✅ BARU: Auto-sync setelah startup jika online
-            setTimeout(() => {
-                processPendingSync();
-            }, 5000);
-        } else {
-            console.log('📴 Offline - pending records waiting for connection');
-            showNotification(
-                'warning',
-                '📴 Mode Offline',
-                `Anda memiliki ${pendingData.pending_count} data pending dari session sebelumnya.\n\nData akan sync otomatis ketika online kembali.`,
-                true
-            );
-        }
-    }
-
-    
-    // Setup event listeners
-    setupEventListeners();
-    setupPositionTradingListeners();
-    
-    console.log('Memuat data dari Google Sheets...');
-    
-    // Load data dari Google Sheets
-    try {
-        await loadData();
-        console.log('✅ Data load completed dari Google Sheets');
-        console.log('Total data:', tradingData.length);
+        updateLoadingProgress(100, 'Selesai!');
+        
+        // Show success
+        setTimeout(() => {
+            const successMsg = tradingData.length > 0 
+                ? `Berhasil memuat ${tradingData.length} data trading!`
+                : 'Aplikasi siap digunakan!';
+                
+            showLoadingSuccess(successMsg);
+        }, 500);
+        
+        console.log('=== APP INITIALIZATION COMPLETED ===');
+        
     } catch (error) {
-        console.error('❌ Gagal memuat data dari Google Sheets:', error);
-        tradingData = [];
-        console.log('🔄 Menggunakan data kosong');
+        console.error('❌ Error during app initialization:', error);
+        
+        // Show error modal
+        showLoadingError(
+            `Error: ${error.message}\n\nSilakan coba lagi atau lanjutkan dengan data terbatas.`,
+            initializeApp // Retry callback
+        );
     }
-    
-    // Tampilkan data
-    updateHomeSummary();
-    displayTradingData();
-    
-    // Setup performance tabs
-    setupPerformanceTabs();
-    // ✅ BARU: Final UI updates
-    updatePendingBadge();
-    updateManualSyncButton();
-    
-    console.log('=== APP INITIALIZATION COMPLETED ===');
 }
 
 // Tambahkan function ini juga:
@@ -1079,7 +1270,33 @@ function showStartupPendingNotification(count) {
         true
     );
 }
-
+function setupLoadingModalEvents() {
+    // ESC key to close loading modal (hanya jika dalam state error/success)
+    document.addEventListener('keydown', function(event) {
+        const loadingModal = document.getElementById('loadingModal');
+        if (event.key === 'Escape' && loadingModal.style.display === 'flex') {
+            const errorSection = document.getElementById('errorSection');
+            const successSection = document.getElementById('successSection');
+            
+            if (errorSection.style.display === 'block' || successSection.style.display === 'block') {
+                hideLoadingModal();
+            }
+        }
+    });
+    
+    // Close modal when clicking outside (hanya jika dalam state error/success)
+    const loadingModal = document.getElementById('loadingModal');
+    loadingModal.addEventListener('click', function(event) {
+        if (event.target === loadingModal) {
+            const errorSection = document.getElementById('errorSection');
+            const successSection = document.getElementById('successSection');
+            
+            if (errorSection.style.display === 'block' || successSection.style.display === 'block') {
+                hideLoadingModal();
+            }
+        }
+    });
+}
 function setupEventListeners() {
     // Navigation
     document.getElementById('homeBtn').addEventListener('click', () => showSection('home'));
@@ -1797,6 +2014,7 @@ function rebuildPositionsFromData() {
 async function loadData() {
     try {
         console.log('🔄 Mengambil data dari Google Sheets...');
+        updateLoadingStatus('Mengambil data dari Google Sheets...');
         
         const response = await fetch(`${APPS_SCRIPT_URL}?action=getData`);
         
@@ -1814,9 +2032,7 @@ async function loadData() {
         }
         
         if (result.data && result.data.length > 0) {
-            // Konversi data dari array ke objek - SESUAI STRUCTURE BARU
             tradingData = result.data.map((row, index) => {
-                // Skip header row jika ada
                 if (index === 0 && row[0] === 'ID') return null;
                 
                 return {
@@ -1835,18 +2051,21 @@ async function loadData() {
                     catatan: row[12] || '',
                     positionData: row[13] ? parsePositionData(row[13]) : null
                 };
-            }).filter(item => item !== null); // Hapus null values
+            }).filter(item => item !== null);
             
-            console.log(`✅ Load ${tradingData.length} records berhasil dari Google Sheets`);
-            // ⭐ BARU: Rebuild positions dari PositionData
+            console.log(`✅ Load ${tradingData.length} records berhasil`);
+            
+            // Rebuild positions dari PositionData
             rebuildPositionsFromData();
         } else {
             tradingData = [];
             console.log('ℹ️ Tidak ada data di Google Sheets');
         }
+        
     } catch (error) {
         console.error('❌ Error loading data from server:', error);
         tradingData = [];
+        throw error; // Re-throw untuk ditangkap oleh initializeApp
     }
 }
 
@@ -3248,6 +3467,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
