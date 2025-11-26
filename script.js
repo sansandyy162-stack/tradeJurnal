@@ -95,9 +95,8 @@ function setupAutoSync() {
     console.log('Current online status:', navigator.onLine ? '🌐 ONLINE' : '📴 OFFLINE');
 }
 
-// Process sync untuk semua data pending
+// REAL SYNC PROCESS (ganti simulation)
 async function processPendingSync() {
-    console.log('🔄 Starting pending sync process...');
     const pendingData = getPendingData();
     
     if (pendingData.pending_count === 0) {
@@ -105,7 +104,10 @@ async function processPendingSync() {
         return;
     }
     
-    console.log(`📦 Syncing ${pendingData.pending_count} pending records...`);
+    console.log(`🔄 Syncing ${pendingData.pending_count} pending records...`);
+    
+    // Show sync progress
+    showSyncProgress(pendingData.pending_count);
     
     try {
         // Update status sync attempt
@@ -113,16 +115,51 @@ async function processPendingSync() {
         updatedPendingData.last_sync_attempt = new Date().toISOString();
         localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(updatedPendingData));
         
-        // Untuk testing: just log the data, don't actually send to Sheets yet
-        console.log('📋 Pending records to sync:', pendingData.pending_records);
+        // REAL SYNC: Load current data first
+        await loadData();
         
-        // SIMULASI SUCCESS UNTUK TESTING
-        console.log('✅ SIMULATION: Sync successful (actual Sheets sync disabled for testing)');
+        // Combine existing data with pending data
+        const allData = [...tradingData];
         
-        // Hapus data pending dari localStorage (simulasi success)
-        clearPendingData();
+        for (const pendingRecord of pendingData.pending_records) {
+            allData.push(pendingRecord.data);
+            console.log('➕ Adding pending record:', pendingRecord.data.kodeSaham);
+        }
         
-        console.log('🎉 Pending data cleared (simulation)');
+        console.log('📤 Sending combined data to Sheets:', allData.length, 'records');
+        
+        // Send to Google Sheets
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'saveAllData',
+                jsonData: JSON.stringify(allData)
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Pending data synced successfully:', result);
+            
+            // Clear pending data
+            clearPendingData();
+            
+            // Update tradingData dengan data terbaru
+            tradingData = allData;
+            
+            // Update UI
+            updatePendingBadge();
+            updateHomeSummary();
+            displayTradingData();
+            
+            showSyncSuccessNotification(pendingData.pending_count);
+            
+        } else {
+            throw new Error('Sync failed with status: ' + response.status);
+        }
         
     } catch (error) {
         console.error('❌ Pending sync failed:', error);
@@ -191,6 +228,240 @@ function testAutoSyncSystem() {
     processPendingSync();
     
     console.log('✅ Auto-Sync test completed');
+}
+// ======== 🎯 PHASE 2A: PENDING DATA UI INDICATOR ========
+
+// Create and update pending badge
+// Add pulse animation to CSS
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
+        50% { transform: scale(1.05); box-shadow: 0 6px 20px rgba(231, 76, 60, 0.5); }
+        100% { transform: scale(1); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
+    }
+`;
+document.head.appendChild(style);
+function createPendingBadge() {
+    // Cek jika badge sudah ada
+    if (document.getElementById('pending-badge')) {
+        return document.getElementById('pending-badge');
+    }
+    
+    const badge = document.createElement('div');
+    badge.id = 'pending-badge';
+    badge.style.cssText = `
+        position: fixed;
+        top: 15px;
+        right: 15px;
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 9999;
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+        animation: pulse 2s infinite;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        gap: 5px;
+    `;
+    
+    badge.innerHTML = `
+        <span>⏳</span>
+        <span id="pending-count">0</span>
+        <span>Pending</span>
+    `;
+    
+    // Click to show pending details
+    badge.addEventListener('click', showPendingDetails);
+    
+    document.body.appendChild(badge);
+    return badge;
+}
+
+// Update pending badge
+function updatePendingBadge() {
+    const badge = createPendingBadge();
+    const pendingData = getPendingData();
+    const countElement = document.getElementById('pending-count');
+    
+    if (pendingData.pending_count > 0) {
+        countElement.textContent = pendingData.pending_count;
+        badge.style.display = 'flex';
+        
+        // Add different animation based on count
+        if (pendingData.pending_count > 3) {
+            badge.style.animation = 'pulse 1s infinite';
+            badge.style.background = 'linear-gradient(135deg, #e74c3c, #d35400)';
+        }
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// Show pending details modal
+function showPendingDetails() {
+    const pendingData = getPendingData();
+    
+    if (pendingData.pending_count === 0) {
+        showNotification('info', '📋 Data Pending', 'Tidak ada data pending yang menunggu sync.', true);
+        return;
+    }
+    
+    let detailsHTML = `Anda memiliki ${pendingData.pending_count} data pending:\n\n`;
+    
+    pendingData.pending_records.forEach((record, index) => {
+        const timeAgo = getTimeAgo(record.timestamp);
+        detailsHTML += `${index + 1}. ${record.data.kodeSaham} - ${record.data.lot} lot (${timeAgo})\n`;
+    });
+    
+    detailsHTML += `\nData akan otomatis sync ketika online.`;
+    
+    showNotification('warning', '⏳ Data Pending', detailsHTML, false);
+}
+
+// Helper: Calculate time ago
+function getTimeAgo(timestamp) {
+    const now = new Date();
+    const recordTime = new Date(timestamp);
+    const diffMs = now - recordTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    
+    if (diffMins < 1) return 'baru saja';
+    if (diffMins < 60) return `${diffMins} menit lalu`;
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    return `${Math.floor(diffHours / 24)} hari lalu`;
+}
+// ======== 🎯 PHASE 2B: ONLINE/OFFLINE STATUS INDICATOR ========
+
+function createStatusIndicator() {
+    // Cek jika indicator sudah ada
+    if (document.getElementById('status-indicator')) {
+        return document.getElementById('status-indicator');
+    }
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'status-indicator';
+    indicator.style.cssText = `
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        padding: 6px 12px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        z-index: 9998;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    `;
+    
+    document.body.appendChild(indicator);
+    updateStatusIndicator();
+    return indicator;
+}
+
+function updateStatusIndicator() {
+    const indicator = createStatusIndicator();
+    
+    if (navigator.onLine) {
+        indicator.innerHTML = '🌐 Online';
+        indicator.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
+        indicator.style.color = 'white';
+    } else {
+        indicator.innerHTML = '📴 Offline';
+        indicator.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+        indicator.style.color = 'white';
+    }
+}
+
+// Update status indicator when connectivity changes
+function setupStatusIndicator() {
+    window.addEventListener('online', function() {
+        updateStatusIndicator();
+        console.log('✅ Status: Online');
+    });
+    
+    window.addEventListener('offline', function() {
+        updateStatusIndicator();
+        console.log('❌ Status: Offline');
+    });
+    
+    // Initial setup
+    updateStatusIndicator();
+}
+// ======== 🎯 PHASE 2C: SYNC PROGRESS INDICATOR ========
+
+function showSyncProgress(count) {
+    const modal = document.getElementById('notificationModal');
+    const content = document.getElementById('notificationContent');
+    const icon = document.getElementById('notificationIcon');
+    const title = document.getElementById('notificationTitle');
+    const message = document.getElementById('notificationMessage');
+    const btn = document.getElementById('notificationBtn');
+    
+    // Setup sync progress UI
+    content.className = 'notification-content notification-info';
+    icon.textContent = '🔄';
+    icon.style.color = '#3498db';
+    title.textContent = '🔄 Sedang Sync Data';
+    message.innerHTML = `
+        <div style="text-align: center;">
+            <div style="margin-bottom: 15px;">Menyinkronisasi ${count} data pending ke Google Sheets...</div>
+            <div style="display: inline-block; width: 100%; height: 6px; background: #ecf0f1; border-radius: 3px; overflow: hidden;">
+                <div id="syncProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3498db, #2980b9); transition: width 0.5s ease;"></div>
+            </div>
+            <div id="syncProgressText" style="margin-top: 8px; font-size: 12px; color: #7f8c8d;">Memulai...</div>
+        </div>
+    `;
+    btn.style.display = 'none';
+    
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    // Simulate progress (in real app, this would be based on actual sync progress)
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 100) progress = 100;
+        
+        const progressBar = document.getElementById('syncProgressBar');
+        const progressText = document.getElementById('syncProgressText');
+        
+        if (progressBar && progressText) {
+            progressBar.style.width = progress + '%';
+            progressText.textContent = `Progress: ${Math.min(100, Math.round(progress))}%`;
+        }
+        
+        if (progress >= 100) {
+            clearInterval(progressInterval);
+            setTimeout(() => {
+                closeNotification();
+            }, 500);
+        }
+    }, 300);
+}
+// Test function untuk Phase 2
+function testPhase2Features() {
+    console.log('🧪 Testing Phase 2 Features...');
+    
+    // Test pending badge
+    updatePendingBadge();
+    
+    // Test status indicator
+    updateStatusIndicator();
+    
+    // Test dengan menambah pending data
+    testPendingSystem();
+    testPendingSystem();
+    
+    console.log('✅ Phase 2 features tested');
 }
 
 // ✅ PART 3: SMART SAVE DATA ROUTING
@@ -561,6 +832,10 @@ async function initializeApp() {
 
     // ✅ NEW: Setup auto-sync system FIRST
     setupAutoSync();
+    
+    // ✅ PHASE 2: Setup UI enhancements
+    setupStatusIndicator();
+    createPendingBadge();
     
     // ✅ NEW: Check pending data on startup
     const pendingData = getPendingData();
@@ -2763,6 +3038,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
