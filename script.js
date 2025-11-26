@@ -676,6 +676,84 @@ async function smartSaveData() {
         return { success: false, mode: 'offline_fallback', pendingId: pendingId };
     }
 }
+// ✅ BARU: Smart Save untuk Position Data dengan offline support
+async function smartSavePositionData(positionData) {
+    console.log('💾 Smart save position process started...');
+    
+    // ✅ CEK ONLINE/OFFLINE - ROUTING LOGIC
+    if (!navigator.onLine) {
+        console.log('📴 Offline mode - saving position to pending queue');
+        
+        // Simpan ke pending queue
+        const pendingId = addToPendingQueue(positionData);
+        
+        // Tambahkan ke tradingData sementara untuk UI consistency
+        tradingData.push(positionData);
+        
+        // Update UI
+        updateHomeSummary();
+        displayTradingData();
+        
+        showOfflineSuccessNotification(pendingId);
+        return { success: true, mode: 'offline', pendingId: pendingId };
+    }
+    
+    // ✅ ONLINE MODE: Langsung save ke Sheets
+    console.log('🌐 Online mode - saving position directly to Sheets');
+    
+    try {
+        // Cek jika ada pending data yang perlu di-sync dulu
+        const pendingData = getPendingData();
+        if (pendingData.pending_count > 0) {
+            console.log(`🔄 Found ${pendingData.pending_count} pending records - syncing first...`);
+            await processPendingSync(); // Sync pending data dulu
+        }
+        
+        // Tambahkan data baru ke existing data
+        tradingData.push(positionData);
+        
+        console.log('📤 Sending position data to Sheets:', tradingData.length, 'records');
+        
+        // Kirim ke Google Sheets
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'saveAllData',
+                jsonData: JSON.stringify(tradingData)
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Position data saved directly to Sheets:', result);
+            
+            showOnlineSuccessNotification();
+            return { success: true, mode: 'online' };
+            
+        } else {
+            throw new Error('Save failed with status: ' + response.status);
+        }
+        
+    } catch (error) {
+        console.error('❌ Online save failed, falling back to pending queue:', error);
+        
+        // Fallback: simpan ke pending queue
+        const pendingId = addToPendingQueue(positionData);
+        
+        // Rollback: hapus dari tradingData karena gagal save
+        const index = tradingData.findIndex(item => item.id === positionData.id);
+        if (index > -1) {
+            tradingData.splice(index, 1);
+        }
+        
+        showSaveErrorNotification(error.message);
+        return { success: false, mode: 'offline_fallback', pendingId: pendingId };
+    }
+}
+
 // Notification functions untuk save process
 function showOfflineSuccessNotification(pendingId) {
     console.log(`📴 OFFLINE SAVE: Data saved to pending queue (ID: ${pendingId})`);
@@ -2105,9 +2183,9 @@ async function handleRegularFormSubmit() {
 // }
 
 // ⭐⭐ BARU: Handle Position Trading Submit ⭐⭐
+// ⭐⭐ PERBAIKAN: Handle Position Trading Submit dengan SMART SAVE ⭐⭐
 async function handlePositionFormSubmit(positionType) {
-
-     console.log('🚀 SUBMITTING POSITION FORM:', positionType);
+    console.log('🚀 SUBMITTING POSITION FORM:', positionType);
     
     // Validasi berdasarkan jenis transaksi
     const validation = validatePositionForm(positionType);
@@ -2120,32 +2198,24 @@ async function handlePositionFormSubmit(positionType) {
     }
     
     // Tampilkan loading dan disable form
-    showLoading('Menyimpan data posisi ke Google Sheets...');
+    showLoading('Menyimpan data posisi...');
     disableForm();
     
     try {
         let formData;
-        let successMessage;
         
         switch(positionType) {
             case 'new':
                 formData = await handleNewPosition();
-                successMessage = `✅ Posisi baru berhasil dibuat!\n\nKode Saham: ${formData.kodeSaham}\nLot: ${formData.lot}\nHarga Rata: ${formatCurrency(formData.hargaMasuk)}`;
                 break;
-                
             case 'add':
                 formData = await handleAddToPosition();
-                successMessage = `✅ Berhasil menambah ke posisi existing!\n\nKode Saham: ${formData.kodeSaham}\nTotal Lot: ${formData.positionData.currentTotalLot}\nHarga Rata Baru: ${formatCurrency(formData.positionData.currentAvgPrice)}`;
                 break;
-                
             case 'close':
                 formData = await handleClosePosition();
-                successMessage = `✅ Posisi berhasil ditutup!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`;
                 break;
-                
             case 'partial':
                 formData = await handlePartialExit();
-                successMessage = `✅ Partial exit berhasil!\n\nKode Saham: ${formData.kodeSaham}\nLot Terjual: ${formData.lot}\nRealized P/L: ${formatCurrency(formData.profitLoss)}`;
                 break;
         }
         
@@ -2155,48 +2225,59 @@ async function handlePositionFormSubmit(positionType) {
         
         console.log('Final position data to save:', formData);
         
-        // Tambahkan ke array data
-        tradingData.push(formData);
+        // ✅ PERBAIKAN: GUNAKAN SMART SAVE SYSTEM untuk position data
+        const saveResult = await smartSavePositionData(formData);
         
-        // Simpan ke Google Sheets
-        const saveResult = await saveData();
-        
-        if (!saveResult) {
-            tradingData = tradingData.filter(item => item.id !== formData.id);
-            hideLoading();
-            enableForm();
-            return;
+        if (saveResult.success) {
+            let successMessage;
+            
+            switch(positionType) {
+                case 'new':
+                    successMessage = `✅ Posisi baru berhasil ${saveResult.mode === 'offline' ? 'disimpan lokal' : 'dibuat'}!\n\nKode Saham: ${formData.kodeSaham}\nLot: ${formData.lot}\nHarga Rata: ${formatCurrency(formData.hargaMasuk)}`;
+                    break;
+                case 'add':
+                    successMessage = `✅ Berhasil menambah ke posisi existing ${saveResult.mode === 'offline' ? '(disimpan lokal)' : ''}!\n\nKode Saham: ${formData.kodeSaham}\nTotal Lot: ${formData.positionData.currentTotalLot}\nHarga Rata Baru: ${formatCurrency(formData.positionData.currentAvgPrice)}`;
+                    break;
+                case 'close':
+                    successMessage = `✅ Posisi berhasil ditutup ${saveResult.mode === 'offline' ? '(disimpan lokal)' : ''}!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`;
+                    break;
+                case 'partial':
+                    successMessage = `✅ Partial exit berhasil ${saveResult.mode === 'offline' ? '(disimpan lokal)' : ''}!\n\nKode Saham: ${formData.kodeSaham}\nLot Terjual: ${formData.lot}\nRealized P/L: ${formatCurrency(formData.profitLoss)}`;
+                    break;
+            }
+            
+            if (saveResult.mode === 'offline') {
+                successMessage += `\n\n📋 ID Pending: ${saveResult.pendingId}`;
+            }
+            
+            // Reset form dan kembali ke mode biasa
+            document.getElementById('tradingForm').reset();
+            document.getElementById('lot').value = 1;
+            document.getElementById('positionModeToggle').checked = false;
+            const toggleEvent = new Event('change');
+            document.getElementById('positionModeToggle').dispatchEvent(toggleEvent);
+            
+            // Update tampilan
+            updateHomeSummary();
+            displayTradingData();
+            
+            showNotification('success', '✅ Berhasil', successMessage, false);
+            
+        } else {
+            throw new Error('Gagal menyimpan data position');
         }
         
+    } catch (error) {
+        console.error('Error in position form submission:', error);
+        showNotification('error', '❌ Error Sistem', 'Terjadi error saat menyimpan data posisi:\n\n' + error.message, false);
+    } finally {
         // Sembunyikan loading dan enable form
         hideLoading();
         enableForm();
-        
-        // Tampilkan notifikasi sukses
-        //alert(successMessage);
-        showNotification('success', '✅ Berhasil', successMessage, false);
-        
-        // Reset form dan kembali ke mode biasa
-        document.getElementById('tradingForm').reset();
-        document.getElementById('lot').value = 1;
-        document.getElementById('positionModeToggle').checked = false;
-        const toggleEvent = new Event('change');
-        document.getElementById('positionModeToggle').dispatchEvent(toggleEvent);
-        
-        // Update tampilan
-        updateHomeSummary();
-        displayTradingData();
-        
-    } catch (error) {
-        // Sembunyikan loading dan enable form jika error
-        hideLoading();
-        enableForm();
-        console.error('Error in position form submission:', error);
-        showNotification('error', '❌ Error Sistem', 'Terjadi error saat menyimpan data posisi:\n\n' + error.message, false);
     }
 }
 
-// ⭐⭐ PERBAIKI TOTAL: Validasi Form Position ⭐⭐
+// ⭐⭐ PERBAIKAN: Validasi Form Position yang lebih robust ⭐⭐
 function validatePositionForm(positionType) {
     console.log('🔍 Validating form for:', positionType);
     
@@ -2264,7 +2345,7 @@ function validatePositionForm(positionType) {
         if (positionType === 'partial') {
             const partialLot = parseInt(document.getElementById('partialLot').value) || 0;
             if (partialLot > selectedPosition.remainingLot) {
-                return { isValid: false, message: `Jumlah LOT jual tidak boleh lebih dari ${selectedPosition.remainingLot} lot!` };
+                return { isValid: false, message: `Jumlah LOT jual (${partialLot}) melebihi sisa LOT (${selectedPosition.remainingLot})!` };
             }
         }
     }
@@ -2286,7 +2367,7 @@ async function handleNewPosition() {
     // Hitung fee otomatis jika kosong
     let finalFeeBuy = feeBuy;
     if (!feeBuy || feeBuy === 0) {
-        const autoFee = calculateAutoFee(hargaMasuk, hargaMasuk, lot); // hargaKeluar sama dengan hargaMasuk untuk perhitungan fee
+        const autoFee = calculateAutoFee(hargaMasuk, hargaMasuk, lot);
         finalFeeBuy = autoFee.feeBuy;
     }
     
@@ -2322,6 +2403,10 @@ async function handleAddToPosition() {
     const lot = parseInt(document.getElementById('lot').value);
     const hargaMasuk = parseFloat(document.getElementById('hargaMasuk').value);
     const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+    
+    if (!selectedPosition) {
+        throw new Error('Posisi tidak ditemukan');
+    }
     
     // Hitung average price baru
     const newTotalLot = selectedPosition.totalLot + lot;
@@ -2359,13 +2444,16 @@ async function handleAddToPosition() {
         }
     };
 }
-
 // ⭐⭐ BARU: Handler untuk Tutup Posisi ⭐⭐
 async function handleClosePosition() {
     const selectedPosition = getSelectedPosition();
     const tanggalKeluar = document.getElementById('tanggalKeluar').value;
     const hargaKeluar = parseFloat(document.getElementById('hargaKeluar').value);
     const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+    
+    if (!selectedPosition) {
+        throw new Error('Posisi tidak ditemukan');
+    }
     
     // Hitung profit/loss
     const profitLoss = calculatePositionProfitLoss(selectedPosition, hargaKeluar, selectedPosition.totalLot);
@@ -2410,6 +2498,15 @@ async function handlePartialExit() {
     const partialLot = parseInt(document.getElementById('partialLot').value);
     const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
     
+    if (!selectedPosition) {
+        throw new Error('Posisi tidak ditemukan');
+    }
+    
+    // Validasi partial lot
+    if (partialLot > selectedPosition.remainingLot) {
+        throw new Error(`Jumlah LOT jual (${partialLot}) melebihi sisa LOT (${selectedPosition.remainingLot})`);
+    }
+    
     // Hitung profit/loss untuk partial exit
     const profitLoss = calculatePositionProfitLoss(selectedPosition, hargaKeluar, partialLot);
     
@@ -2443,7 +2540,7 @@ async function handlePartialExit() {
             exitType: 'partial',
             avgPrice: selectedPosition.averagePrice,
             totalLot: partialLot,
-            remainingLot: selectedPosition.totalLot - partialLot,
+            remainingLot: selectedPosition.remainingLot - partialLot,
             parentPosition: selectedPosition.id
         }
     };
@@ -3151,6 +3248,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
