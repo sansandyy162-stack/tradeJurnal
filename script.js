@@ -5,6 +5,63 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCf
 let tradingData = [];
 let lineChart, pieChart, winRateChart, distributionChart;
 let positions = {};
+const PENDING_STORAGE_KEY = 'trading_pending_data';
+
+// Initialize pending data structure
+function getPendingData() {
+    const stored = localStorage.getItem(PENDING_STORAGE_KEY);
+    if (stored) {
+        return JSON.parse(stored);
+    }
+    
+    // Initialize baru jika tidak ada
+    return {
+        pending_records: [],
+        last_sync_attempt: null,
+        pending_count: 0,
+        last_update: new Date().toISOString()
+    };
+}
+
+// Simpan data ke pending queue
+function addToPendingQueue(tradingRecord) {
+    const pendingData = getPendingData();
+    
+    const pendingRecord = {
+        id: `PENDING-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date().toISOString(),
+        data: tradingRecord,
+        status: 'pending',
+        retryCount: 0
+    };
+    
+    pendingData.pending_records.push(pendingRecord);
+    pendingData.pending_count = pendingData.pending_records.length;
+    pendingData.last_update = new Date().toISOString();
+    
+    localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pendingData));
+    
+    console.log('📝 Added to pending queue:', pendingRecord.id);
+    return pendingRecord.id;
+}
+
+// Test function untuk verifikasi
+function testPendingSystem() {
+    console.log('🧪 Testing pending system...');
+    const testData = {
+        id: 'TEST-123',
+        kodeSaham: 'TEST',
+        lot: 1,
+        hargaMasuk: 1000
+    };
+    
+    const pendingId = addToPendingQueue(testData);
+    const pendingData = getPendingData();
+    
+    console.log('Pending data after test:', pendingData);
+    return pendingId;
+}
+
 
 // ⭐⭐ TAMBAHKAN: Fungsi Loading Time ⭐⭐
 function showLoading(message = 'Menyimpan data...') {
@@ -59,6 +116,8 @@ function enableEditForm() {
         button.innerHTML = 'Update Data';
     }
 }
+
+
 
 // Inisialisasi aplikasi
 document.addEventListener('DOMContentLoaded', function() {
@@ -2178,6 +2237,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
