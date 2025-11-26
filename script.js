@@ -3,8 +3,7 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCf
 
 // Variabel global
 let tradingData = [];
-let lineChart, pieChart, winRateChart, distributionChart;
-let positions = {};
+
 const PENDING_STORAGE_KEY = 'trading_pending_data';
 
 // Initialize pending data structure
@@ -61,6 +60,11 @@ function testPendingSystem() {
     console.log('Pending data after test:', pendingData);
     return pendingId;
 }
+
+
+let lineChart, pieChart, winRateChart, distributionChart;
+let positions = {};
+
 
 
 // ⭐⭐ TAMBAHKAN: Fungsi Loading Time ⭐⭐
@@ -2237,6 +2241,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
