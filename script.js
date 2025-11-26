@@ -142,7 +142,7 @@ function clearPendingData() {
 }
 
 // Notification functions
-unction showOfflineNotification() {
+function showOfflineNotification() {
     console.log('📴 OFFLINE NOTIFICATION: Data will be saved locally');
     showNotification(
         'warning',
@@ -2763,6 +2763,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
