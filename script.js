@@ -59,10 +59,7 @@ function testPendingSystem() {
     console.log('Pending data after test:', pendingData);
     return pendingId;
 }
-
 // ✅ PART 2: AUTO-SYNC SYSTEM
-// ✅ PART 2: AUTO-SYNC SYSTEM
-
 // Setup auto-sync listeners
 function setupAutoSync() {
     console.log('🔧 Setting up auto-sync system...');
@@ -178,6 +175,140 @@ function testAutoSyncSystem() {
     console.log('✅ Auto-Sync test completed');
 }
 
+// ✅ PART 3: SMART SAVE DATA ROUTING
+
+// Helper: Get data dari form yang sedang diisi
+function getCurrentFormData() {
+    // Ambil semua nilai dari form
+    const formData = {
+        id: generateId(),
+        tanggalMasuk: document.getElementById('tanggalMasuk').value,
+        tanggalKeluar: document.getElementById('tanggalKeluar').value || '',
+        kodeSaham: document.getElementById('kodeSaham').value.toUpperCase(),
+        hargaMasuk: parseFloat(document.getElementById('hargaMasuk').value) || 0,
+        hargaKeluar: parseFloat(document.getElementById('hargaKeluar').value) || 0,
+        lot: parseInt(document.getElementById('lot').value) || 1,
+        feeBuy: parseFloat(document.getElementById('feeBuy').value) || 0,
+        feeSell: parseFloat(document.getElementById('feeSell').value) || 0,
+        metodeTrading: document.getElementById('metodeTrading').value,
+        catatan: document.getElementById('catatan').value || '',
+        positionData: null
+    };
+    
+    // Hitung profit/loss jika ada harga keluar
+    if (formData.hargaKeluar > 0) {
+        const calculation = calculateProfitLoss(
+            formData.hargaMasuk,
+            formData.hargaKeluar,
+            formData.lot,
+            formData.feeBuy,
+            formData.feeSell
+        );
+        formData.profitLoss = calculation.profitLoss;
+        formData.totalFee = calculation.totalFee;
+        formData.feeBuy = calculation.feeBuy;
+        formData.feeSell = calculation.feeSell;
+    } else {
+        formData.profitLoss = 0;
+        formData.totalFee = formData.feeBuy;
+    }
+    
+    return formData;
+}
+// Smart save data dengan online/offline routing
+async function smartSaveData() {
+    console.log('💾 Smart save process started...');
+    
+    // ✅ Get current form data
+    const currentData = getCurrentFormData();
+    console.log('📝 Form data captured:', currentData.kodeSaham);
+    
+    // ✅ CEK ONLINE/OFFLINE - ROUTING LOGIC
+    if (!navigator.onLine) {
+        console.log('📴 Offline mode - saving to pending queue');
+        
+        // Simpan ke pending queue
+        const pendingId = addToPendingQueue(currentData);
+        
+        // Tambahkan ke tradingData sementara untuk UI consistency
+        tradingData.push(currentData);
+        
+        // Update UI
+        updateHomeSummary();
+        displayTradingData();
+        
+        showOfflineSuccessNotification(pendingId);
+        return { success: true, mode: 'offline', pendingId: pendingId };
+    }
+    
+    // ✅ ONLINE MODE: Langsung save ke Sheets
+    console.log('🌐 Online mode - saving directly to Sheets');
+    
+    try {
+        // Cek jika ada pending data yang perlu di-sync dulu
+        const pendingData = getPendingData();
+        if (pendingData.pending_count > 0) {
+            console.log(`🔄 Found ${pendingData.pending_count} pending records - syncing first...`);
+            await processPendingSync(); // Sync pending data dulu
+        }
+        
+        // Tambahkan data baru ke existing data
+        tradingData.push(currentData);
+        
+        console.log('📤 Sending data to Sheets:', tradingData.length, 'records');
+        
+        // Kirim ke Google Sheets
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'saveAllData',
+                jsonData: JSON.stringify(tradingData)
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Data saved directly to Sheets:', result);
+            
+            showOnlineSuccessNotification();
+            return { success: true, mode: 'online' };
+            
+        } else {
+            throw new Error('Save failed with status: ' + response.status);
+        }
+        
+    } catch (error) {
+        console.error('❌ Online save failed, falling back to pending queue:', error);
+        
+        // Fallback: simpan ke pending queue
+        const pendingId = addToPendingQueue(currentData);
+        
+        // Rollback: hapus dari tradingData karena gagal save
+        tradingData.pop();
+        
+        showSaveErrorNotification(error.message);
+        return { success: false, mode: 'offline_fallback', pendingId: pendingId };
+    }
+}
+// Notification functions untuk save process
+function showOfflineSuccessNotification(pendingId) {
+    console.log(`📴 OFFLINE SAVE: Data saved to pending queue (ID: ${pendingId})`);
+    alert('✅ Data disimpan secara lokal (Mode Offline). Akan sync otomatis ketika online.');
+}
+
+function showOnlineSuccessNotification() {
+    console.log('🌐 ONLINE SAVE: Data saved directly to Google Sheets');
+    alert('✅ Data berhasil disimpan ke Google Sheets!');
+}
+
+function showSaveErrorNotification(errorMsg) {
+    console.log('❌ SAVE ERROR:', errorMsg);
+    alert('❌ Gagal menyimpan data. Data telah disimpan secara lokal dan akan dicoba lagi nanti.\n\nError: ' + errorMsg);
+}
+
 
 let lineChart, pieChart, winRateChart, distributionChart;
 let positions = {};
@@ -247,6 +378,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function initializeApp() {
     console.log('=== INITIALIZING APP ===');
+
+    // ✅ NEW: Setup auto-sync system FIRST
+    setupAutoSync();
+    
+    // ✅ NEW: Check pending data on startup
+    const pendingData = getPendingData();
+    if (pendingData.pending_count > 0) {
+        console.log(`📋 Found ${pendingData.pending_count} pending records from previous session`);
+        if (navigator.onLine) {
+            console.log('🌐 Online - pending records will auto-sync on next save');
+            // Tampilkan notifikasi ke user
+            showStartupPendingNotification(pendingData.pending_count);
+        } else {
+            console.log('📴 Offline - pending records waiting for connection');
+        }
+    }
+
     
     // Setup event listeners
     setupEventListeners();
@@ -273,6 +421,12 @@ async function initializeApp() {
     setupPerformanceTabs();
     
     console.log('=== APP INITIALIZATION COMPLETED ===');
+}
+
+// Tambahkan function ini juga:
+function showStartupPendingNotification(count) {
+    console.log(`📋 Startup: Anda memiliki ${count} data pending yang menunggu sync.`);
+    // Bisa ditambahkan UI notification nanti
 }
 
 function setupEventListeners() {
@@ -1224,8 +1378,12 @@ async function handleFormSubmit(event) {
     }
 }
 
-// ⭐⭐ BARU: Handle Regular Trading ⭐⭐
+// ⭐⭐ BARU: Handle Regular Trading dengan SMART SAVE ⭐⭐
+// GANTI function handleRegularFormSubmit() yang sudah ada dengan ini:
+
 async function handleRegularFormSubmit() {
+    console.log('🔄 Handling regular form submit with smart save...');
+    
     // Validasi form
     const tanggalMasuk = document.getElementById('tanggalMasuk').value;
     const tanggalKeluar = document.getElementById('tanggalKeluar').value;
@@ -1234,12 +1392,12 @@ async function handleRegularFormSubmit() {
     const hargaKeluar = document.getElementById('hargaKeluar').value;
     const lot = document.getElementById('lot').value;
     
-    if (!tanggalMasuk || !tanggalKeluar || !kodeSaham || !hargaMasuk || !hargaKeluar || !lot) {
+    if (!tanggalMasuk || !kodeSaham || !hargaMasuk || !lot) {
         alert('Harap isi semua field yang wajib!');
         return;
     }
     
-    if (tanggalKeluar < tanggalMasuk) {
+    if (tanggalKeluar && tanggalKeluar < tanggalMasuk) {
         alert('Tanggal keluar tidak boleh sebelum tanggal masuk!');
         return;
     }
@@ -1249,77 +1407,131 @@ async function handleRegularFormSubmit() {
         return;
     }
     
-    // Tampilkan loading dan disable form
-    showLoading('Menyimpan data ke Google Sheets...');
+    // Tampilkan loading
+    showLoading('Menyimpan data...');
     disableForm();
     
     try {
-        const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
-        const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+        // ✅ GUNAKAN SMART SAVE SYSTEM
+        const saveResult = await smartSaveData();
         
-        const calculation = calculateProfitLoss(
-            parseFloat(hargaMasuk),
-            parseFloat(hargaKeluar),
-            parseInt(lot),
-            feeBuy,
-            feeSell
-        );
-        
-        const formData = {
-            id: generateId(),
-            tanggalMasuk: tanggalMasuk,
-            tanggalKeluar: tanggalKeluar,
-            kodeSaham: kodeSaham.toUpperCase(),
-            hargaMasuk: parseFloat(hargaMasuk),
-            hargaKeluar: parseFloat(hargaKeluar),
-            lot: parseInt(lot),
-            feeBuy: calculation.feeBuy,
-            feeSell: calculation.feeSell,
-            totalFee: calculation.totalFee,
-            profitLoss: calculation.profitLoss,
-            metodeTrading: document.getElementById('metodeTrading').value,
-            catatan: document.getElementById('catatan').value,
-            positionData: null
-        };
-        
-        console.log('Final data to save:', formData);
-        
-        // Tambahkan ke array data
-        tradingData.push(formData);
-        
-        // Simpan ke Google Sheets
-        const saveResult = await saveData();
-        
-        if (!saveResult) {
-            tradingData = tradingData.filter(item => item.id !== formData.id);
-            hideLoading();
-            enableForm();
-            return;
+        if (saveResult.success) {
+            console.log('✅ Form submit successful:', saveResult);
+            
+            // Reset form
+            document.getElementById('tradingForm').reset();
+            document.getElementById('lot').value = 1;
+            
+        } else {
+            console.error('❌ Form submit failed:', saveResult);
         }
         
+    } catch (error) {
+        console.error('❌ Error in form submission:', error);
+        alert('❌ Error menyimpan data: ' + error.message);
+    } finally {
         // Sembunyikan loading dan enable form
         hideLoading();
         enableForm();
-        
-        // Tampilkan notifikasi sukses
-        alert(`✅ Data trading berhasil disimpan ke Google Sheets!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`);
-        
-        // Reset form
-        document.getElementById('tradingForm').reset();
-        document.getElementById('lot').value = 1;
-        
-        // Update tampilan
-        updateHomeSummary();
-        displayTradingData();
-        
-    } catch (error) {
-        // Sembunyikan loading dan enable form jika error
-        hideLoading();
-        enableForm();
-        console.error('Error in form submission:', error);
-        alert('❌ Error menyimpan data: ' + error.message);
     }
 }
+
+//  CODE EXISTING // ⭐⭐ BARU: Handle Regular Trading ⭐⭐
+// async function handleRegularFormSubmit() {
+//     // Validasi form
+//     const tanggalMasuk = document.getElementById('tanggalMasuk').value;
+//     const tanggalKeluar = document.getElementById('tanggalKeluar').value;
+//     const kodeSaham = document.getElementById('kodeSaham').value;
+//     const hargaMasuk = document.getElementById('hargaMasuk').value;
+//     const hargaKeluar = document.getElementById('hargaKeluar').value;
+//     const lot = document.getElementById('lot').value;
+    
+//     if (!tanggalMasuk || !tanggalKeluar || !kodeSaham || !hargaMasuk || !hargaKeluar || !lot) {
+//         alert('Harap isi semua field yang wajib!');
+//         return;
+//     }
+    
+//     if (tanggalKeluar < tanggalMasuk) {
+//         alert('Tanggal keluar tidak boleh sebelum tanggal masuk!');
+//         return;
+//     }
+    
+//     if (parseInt(lot) < 1) {
+//         alert('Jumlah LOT minimal 1!');
+//         return;
+//     }
+    
+//     // Tampilkan loading dan disable form
+//     showLoading('Menyimpan data ke Google Sheets...');
+//     disableForm();
+    
+//     try {
+//         const feeBuy = parseFloat(document.getElementById('feeBuy').value) || 0;
+//         const feeSell = parseFloat(document.getElementById('feeSell').value) || 0;
+        
+//         const calculation = calculateProfitLoss(
+//             parseFloat(hargaMasuk),
+//             parseFloat(hargaKeluar),
+//             parseInt(lot),
+//             feeBuy,
+//             feeSell
+//         );
+        
+//         const formData = {
+//             id: generateId(),
+//             tanggalMasuk: tanggalMasuk,
+//             tanggalKeluar: tanggalKeluar,
+//             kodeSaham: kodeSaham.toUpperCase(),
+//             hargaMasuk: parseFloat(hargaMasuk),
+//             hargaKeluar: parseFloat(hargaKeluar),
+//             lot: parseInt(lot),
+//             feeBuy: calculation.feeBuy,
+//             feeSell: calculation.feeSell,
+//             totalFee: calculation.totalFee,
+//             profitLoss: calculation.profitLoss,
+//             metodeTrading: document.getElementById('metodeTrading').value,
+//             catatan: document.getElementById('catatan').value,
+//             positionData: null
+//         };
+        
+//         console.log('Final data to save:', formData);
+        
+//         // Tambahkan ke array data
+//         tradingData.push(formData);
+        
+//         // Simpan ke Google Sheets
+//         const saveResult = await saveData();
+        
+//         if (!saveResult) {
+//             tradingData = tradingData.filter(item => item.id !== formData.id);
+//             hideLoading();
+//             enableForm();
+//             return;
+//         }
+        
+//         // Sembunyikan loading dan enable form
+//         hideLoading();
+//         enableForm();
+        
+//         // Tampilkan notifikasi sukses
+//         alert(`✅ Data trading berhasil disimpan ke Google Sheets!\n\nKode Saham: ${formData.kodeSaham}\nProfit/Loss: ${formatCurrency(formData.profitLoss)}`);
+        
+//         // Reset form
+//         document.getElementById('tradingForm').reset();
+//         document.getElementById('lot').value = 1;
+        
+//         // Update tampilan
+//         updateHomeSummary();
+//         displayTradingData();
+        
+//     } catch (error) {
+//         // Sembunyikan loading dan enable form jika error
+//         hideLoading();
+//         enableForm();
+//         console.error('Error in form submission:', error);
+//         alert('❌ Error menyimpan data: ' + error.message);
+//     }
+// }
 
 // ⭐⭐ BARU: Handle Position Trading Submit ⭐⭐
 async function handlePositionFormSubmit(positionType) {
@@ -2358,6 +2570,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
