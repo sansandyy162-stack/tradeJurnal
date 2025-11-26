@@ -3,7 +3,6 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5nymwb9rYMRCf
 
 // Variabel global
 let tradingData = [];
-
 const PENDING_STORAGE_KEY = 'trading_pending_data';
 
 // Initialize pending data structure
@@ -60,6 +59,152 @@ function testPendingSystem() {
     console.log('Pending data after test:', pendingData);
     return pendingId;
 }
+
+// ✅ PART 2: AUTO-SYNC SYSTEM
+
+// Setup auto-sync listeners
+function setupAutoSync() {
+    console.log('🔧 Setting up auto-sync system...');
+    
+    window.addEventListener('online', function() {
+        console.log('🌐 Online detected - checking pending data...');
+        const pendingData = getPendingData();
+        if (pendingData.pending_count > 0) {
+            console.log(`🔄 Found ${pendingData.pending_count} pending records - will sync soon`);
+            // Delay sedikit untuk pastikan koneksi stabil
+            setTimeout(() => {
+                processPendingSync();
+            }, 3000);
+        } else {
+            console.log('✅ No pending data to sync');
+        }
+    });
+    
+    window.addEventListener('offline', function() {
+        console.log('📴 Offline mode - data will be saved locally');
+        showOfflineNotification();
+    });
+    
+    console.log('✅ Auto-sync system ready');
+}
+
+// Process sync untuk semua data pending
+async function processPendingSync() {
+    const pendingData = getPendingData();
+    
+    if (pendingData.pending_count === 0) {
+        console.log('✅ No pending data to sync');
+        return;
+    }
+    
+    console.log(`🔄 Syncing ${pendingData.pending_count} pending records...`);
+    
+    try {
+        // Update status sync attempt
+        const updatedPendingData = getPendingData();
+        updatedPendingData.last_sync_attempt = new Date().toISOString();
+        localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(updatedPendingData));
+        
+        // Gabungkan data existing dengan data pending
+        const allData = [...tradingData]; // Data yang sudah ada di memory
+        
+        for (const pendingRecord of pendingData.pending_records) {
+            allData.push(pendingRecord.data);
+            console.log('➕ Adding pending record:', pendingRecord.data.kodeSaham);
+        }
+        
+        console.log('📤 Sending combined data to Sheets:', allData.length, 'records');
+        
+        // Kirim gabungan data ke Sheets
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'saveAllData',
+                jsonData: JSON.stringify(allData)
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Pending data synced successfully:', result);
+            
+            // Hapus data pending dari localStorage
+            clearPendingData();
+            
+            // Update tradingData dengan data terbaru
+            tradingData = allData;
+            
+            // Update UI
+            showSyncSuccessNotification(pendingData.pending_count);
+            updateHomeSummary();
+            displayTradingData();
+            
+        } else {
+            throw new Error('Sync failed with status: ' + response.status);
+        }
+        
+    } catch (error) {
+        console.error('❌ Pending sync failed:', error);
+        showSyncErrorNotification();
+        
+        // Increment retry count untuk semua pending records
+        incrementRetryCount();
+    }
+}
+
+// Hapus data pending setelah success sync
+function clearPendingData() {
+    localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify({
+        pending_records: [],
+        last_sync_attempt: new Date().toISOString(),
+        pending_count: 0,
+        last_update: new Date().toISOString()
+    }));
+    console.log('🧹 Cleared pending data after successful sync');
+}
+
+// Increment retry count (jika sync gagal)
+function incrementRetryCount() {
+    const pendingData = getPendingData();
+    let needsCleanup = false;
+    
+    pendingData.pending_records.forEach(record => {
+        record.retryCount += 1;
+        if (record.retryCount > 3) {
+            needsCleanup = true;
+            console.warn(`⚠️ Removing record ${record.id} - too many retries`);
+        }
+    });
+    
+    // Hapus records yang sudah terlalu banyak retry
+    if (needsCleanup) {
+        pendingData.pending_records = pendingData.pending_records.filter(record => record.retryCount <= 3);
+        pendingData.pending_count = pendingData.pending_records.length;
+    }
+    
+    localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pendingData));
+    console.log('📈 Incremented retry counts');
+}
+
+// Notification functions
+function showOfflineNotification() {
+    console.log('📴 OFFLINE: Data will be saved locally');
+    // Bisa diganti dengan UI yang lebih elegant nanti
+}
+
+function showSyncSuccessNotification(count) {
+    console.log(`✅ SYNC SUCCESS: ${count} records synced to Sheets`);
+    // Bisa diganti dengan UI notification nanti
+}
+
+function showSyncErrorNotification() {
+    console.log('❌ SYNC FAILED: Will retry later');
+    // Bisa diganti dengan UI notification nanti
+}
+
 
 
 let lineChart, pieChart, winRateChart, distributionChart;
@@ -2241,6 +2386,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
