@@ -142,16 +142,34 @@ function clearPendingData() {
 }
 
 // Notification functions
-function showOfflineNotification() {
+unction showOfflineNotification() {
     console.log('📴 OFFLINE NOTIFICATION: Data will be saved locally');
+    showNotification(
+        'warning',
+        '📴 Mode Offline',
+        'Anda sedang dalam mode offline.\n\nData akan disimpan secara lokal dan akan sync otomatis ketika online kembali.',
+        true
+    );
 }
 
 function showSyncSuccessNotification(count) {
     console.log(`✅ SYNC SUCCESS: ${count} records synced to Sheets`);
+    showNotification(
+        'success',
+        '🔄 Sync Berhasil',
+        `${count} data pending berhasil di-sync ke Google Sheets!\n\nSemua data sudah tersinkronisasi dengan cloud.`,
+        true
+    );
 }
 
 function showSyncErrorNotification() {
     console.log('❌ SYNC FAILED: Will retry later');
+    showNotification(
+        'error',
+        '❌ Sync Gagal',
+        'Gagal melakukan sync data ke Google Sheets.\n\nSistem akan mencoba lagi secara otomatis.\nData tetap aman tersimpan secara lokal.',
+        false
+    );
 }
 
 // Test function untuk PART 2
@@ -296,19 +314,181 @@ async function smartSaveData() {
 // Notification functions untuk save process
 function showOfflineSuccessNotification(pendingId) {
     console.log(`📴 OFFLINE SAVE: Data saved to pending queue (ID: ${pendingId})`);
-    alert('✅ Data disimpan secara lokal (Mode Offline). Akan sync otomatis ketika online.');
+    showNotification(
+        'success',
+        '💾 Data Disimpan Lokal',
+        `Data berhasil disimpan secara lokal (Mode Offline).\n\nAkan sync otomatis ketika online kembali.\n\n📋 ID Pending: ${pendingId}`,
+        false // Tidak auto-close, user harus klik OK
+    );
 }
 
 function showOnlineSuccessNotification() {
     console.log('🌐 ONLINE SAVE: Data saved directly to Google Sheets');
-    alert('✅ Data berhasil disimpan ke Google Sheets!');
+    showNotification(
+        'success',
+        '✅ Berhasil Disimpan',
+        'Data trading berhasil disimpan ke Google Sheets!\n\nData Anda sudah aman tersimpan di cloud.',
+        true
+    );
 }
 
 function showSaveErrorNotification(errorMsg) {
     console.log('❌ SAVE ERROR:', errorMsg);
-    alert('❌ Gagal menyimpan data. Data telah disimpan secara lokal dan akan dicoba lagi nanti.\n\nError: ' + errorMsg);
+    showNotification(
+        'error',
+        '❌ Gagal Menyimpan',
+        `Gagal menyimpan data ke Google Sheets.\n\nData telah disimpan secara lokal dan akan dicoba sync otomatis nanti.\n\n🔧 Error: ${errorMsg}`,
+        false
+    );
 }
 
+// 🎨 CUSTOM NOTIFICATION SYSTEM
+
+// Show custom notification modal
+function showNotification(type, title, message, autoClose = true) {
+    const modal = document.getElementById('notificationModal');
+    const content = document.getElementById('notificationContent');
+    const icon = document.getElementById('notificationIcon');
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
+    const btn = document.getElementById('notificationBtn');
+    
+    // Reset classes
+    content.className = 'notification-content';
+    
+    // Set content based on type
+    switch(type) {
+        case 'success':
+            content.classList.add('notification-success');
+            icon.textContent = '✅';
+            icon.style.color = '#2ecc71';
+            break;
+        case 'warning':
+            content.classList.add('notification-warning');
+            icon.textContent = '⚠️';
+            icon.style.color = '#f39c12';
+            break;
+        case 'error':
+            content.classList.add('notification-error');
+            icon.textContent = '❌';
+            icon.style.color = '#e74c3c';
+            break;
+        case 'info':
+            content.classList.add('notification-info');
+            icon.textContent = 'ℹ️';
+            icon.style.color = '#3498db';
+            break;
+        default:
+            content.classList.add('notification-info');
+            icon.textContent = '💾';
+            icon.style.color = '#3498db';
+    }
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    
+    // Show modal
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent background scroll
+    
+    // Auto close after 3 seconds if enabled
+    let autoCloseTimer;
+    if (autoClose) {
+        autoCloseTimer = setTimeout(() => {
+            closeNotification();
+        }, 3000);
+    }
+    
+    // Close button event
+    btn.onclick = function() {
+        if (autoCloseTimer) clearTimeout(autoCloseTimer);
+        closeNotification();
+    };
+    
+    // Close when clicking outside
+    modal.onclick = function(event) {
+        if (event.target === modal) {
+            if (autoCloseTimer) clearTimeout(autoCloseTimer);
+            closeNotification();
+        }
+    };
+    
+    // ESC key to close
+    const escHandler = function(event) {
+        if (event.key === 'Escape') {
+            if (autoCloseTimer) clearTimeout(autoCloseTimer);
+            closeNotification();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+// Close notification
+function closeNotification() {
+    const modal = document.getElementById('notificationModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = 'auto'; // Restore scroll
+}
+
+// Confirmation modal (for delete operations)
+function showConfirmationModal(title, message) {
+    return new Promise((resolve) => {
+        showNotification(
+            'warning',
+            title,
+            message + '\n\nKlik OK untuk lanjut, atau tutup untuk batal.',
+            false
+        );
+        
+        const btn = document.getElementById('notificationBtn');
+        btn.textContent = 'Ya, Hapus';
+        btn.style.background = '#e74c3c';
+        
+        const originalOnClick = btn.onclick;
+        
+        btn.onclick = function() {
+            closeNotification();
+            btn.textContent = 'OK'; // Reset button text
+            btn.style.background = '#3498db'; // Reset button color
+            resolve(true);
+        };
+        
+        // Handle modal close without confirmation
+        const modal = document.getElementById('notificationModal');
+        const closeHandler = function(event) {
+            if (event.target === modal) {
+                closeNotification();
+                btn.textContent = 'OK'; // Reset button text
+                btn.style.background = '#3498db'; // Reset button color
+                modal.removeEventListener('click', closeHandler);
+                resolve(false);
+            }
+        };
+        modal.addEventListener('click', closeHandler);
+    });
+}
+
+
+// Test function untuk notification system
+function testNotificationSystem() {
+    console.log('🧪 Testing notification system...');
+    
+    // Test different notification types
+    showNotification('success', '✅ Test Success', 'Ini adalah notifikasi success!\nAuto-close dalam 3 detik.', true);
+    
+    setTimeout(() => {
+        showNotification('error', '❌ Test Error', 'Ini adalah notifikasi error!\nUser harus klik OK.', false);
+    }, 3500);
+    
+    setTimeout(() => {
+        showNotification('warning', '⚠️ Test Warning', 'Ini adalah notifikasi warning!\nAuto-close dalam 3 detik.', true);
+    }, 7000);
+    
+    setTimeout(() => {
+        showNotification('info', 'ℹ️ Test Info', 'Ini adalah notifikasi info!\nAuto-close dalam 3 detik.', true);
+    }, 10500);
+}
 
 let lineChart, pieChart, winRateChart, distributionChart;
 let positions = {};
@@ -425,8 +605,13 @@ async function initializeApp() {
 
 // Tambahkan function ini juga:
 function showStartupPendingNotification(count) {
-    console.log(`📋 Startup: Anda memiliki ${count} data pending yang menunggu sync.`);
-    // Bisa ditambahkan UI notification nanti
+    console.log(`📋 Startup: ${count} data pending menunggu sync`);
+    showNotification(
+        'info',
+        '📋 Data Pending Ditemukan',
+        `Ditemukan ${count} data pending dari session sebelumnya.\n\nData akan otomatis sync ketika Anda menyimpan data baru atau kembali online.`,
+        true
+    );
 }
 
 function setupEventListeners() {
@@ -1379,8 +1564,6 @@ async function handleFormSubmit(event) {
 }
 
 // ⭐⭐ BARU: Handle Regular Trading dengan SMART SAVE ⭐⭐
-// GANTI function handleRegularFormSubmit() yang sudah ada dengan ini:
-
 async function handleRegularFormSubmit() {
     console.log('🔄 Handling regular form submit with smart save...');
     
@@ -1393,18 +1576,18 @@ async function handleRegularFormSubmit() {
     const lot = document.getElementById('lot').value;
     
     if (!tanggalMasuk || !kodeSaham || !hargaMasuk || !lot) {
-        alert('Harap isi semua field yang wajib!');
-        return;
+        showNotification('error', '❌ Data Tidak Lengkap', 'Harap isi semua field yang wajib!\n\n• Tanggal Masuk\n• Kode Saham\n• Harga Masuk\n• Jumlah LOT', false);
+    return;
     }
     
     if (tanggalKeluar && tanggalKeluar < tanggalMasuk) {
-        alert('Tanggal keluar tidak boleh sebelum tanggal masuk!');
-        return;
+        showNotification('error', '❌ Tanggal Tidak Valid', 'Tanggal keluar tidak boleh sebelum tanggal masuk!\n\nSilakan periksa kembali tanggal yang dimasukkan.', false);
+    return;
     }
     
     if (parseInt(lot) < 1) {
-        alert('Jumlah LOT minimal 1!');
-        return;
+        showNotification('error', '❌ Jumlah LOT Invalid', 'Jumlah LOT minimal 1!\n\nSilakan masukkan jumlah LOT yang valid.', false);
+    return;
     }
     
     // Tampilkan loading
@@ -1428,7 +1611,7 @@ async function handleRegularFormSubmit() {
         
     } catch (error) {
         console.error('❌ Error in form submission:', error);
-        alert('❌ Error menyimpan data: ' + error.message);
+        showNotification('error', '❌ Error Sistem', 'Terjadi error saat menyimpan data:\n\n' + error.message, false);
     } finally {
         // Sembunyikan loading dan enable form
         hideLoading();
@@ -1544,7 +1727,7 @@ async function handlePositionFormSubmit(positionType) {
     
     if (!validation.isValid) {
         console.log('❌ VALIDATION FAILED:', validation.message);
-        alert(validation.message);
+        showNotification('error', '❌ Validasi Gagal', validation.message, false);
         return;
     }
     
@@ -1602,7 +1785,8 @@ async function handlePositionFormSubmit(positionType) {
         enableForm();
         
         // Tampilkan notifikasi sukses
-        alert(successMessage);
+        //alert(successMessage);
+        showNotification('success', '✅ Berhasil', successMessage, false);
         
         // Reset form dan kembali ke mode biasa
         document.getElementById('tradingForm').reset();
@@ -1620,7 +1804,7 @@ async function handlePositionFormSubmit(positionType) {
         hideLoading();
         enableForm();
         console.error('Error in position form submission:', error);
-        alert('❌ Error menyimpan data posisi: ' + error.message);
+        showNotification('error', '❌ Error Sistem', 'Terjadi error saat menyimpan data posisi:\n\n' + error.message, false);
     }
 }
 
@@ -2067,10 +2251,18 @@ async function handleEditSubmit(event) {
 }
 
 // Hapus data trading
+// Ganti confirm dengan confirmation modal
 async function deleteTradingData(id) {
-    if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) {
+    const userConfirmed = await showConfirmationModal(
+        '🗑️ Hapus Data Trading',
+        'Apakah Anda yakin ingin menghapus data trading ini?\n\nTindakan ini tidak dapat dibatalkan.'
+    );
+    
+    if (!userConfirmed) {
+        console.log('❌ User cancelled delete operation');
         return;
     }
+    
     // Tampilkan loading
     showLoading('Menghapus data dari Google Sheets...');
     
@@ -2078,14 +2270,15 @@ async function deleteTradingData(id) {
     
     // Simpan perubahan
     await saveData();
+    
     // Sembunyikan loading
-        hideLoading();
+    hideLoading();
     
     // Update tampilan
     updateHomeSummary();
     displayTradingData();
     
-    alert('Data trading berhasil dihapus!');
+    showNotification('success', '✅ Data Dihapus', 'Data trading berhasil dihapus dari sistem!', true);
 }
 
 // Filter data
@@ -2570,6 +2763,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
