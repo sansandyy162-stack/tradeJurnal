@@ -2362,7 +2362,117 @@ function updateLineChart(data) {
     
     console.log('✅ Line chart updated successfully');
 }
-
+// Function: Update Pie Chart (Distribution of Trading Methods)
+function updatePieChart(data) {
+    console.log('🥧 Updating pie chart with', data.length, 'items');
+    
+    const pieCtx = document.getElementById('pieChart');
+    if (!pieCtx) {
+        console.error('❌ Pie chart canvas not found');
+        return;
+    }
+    
+    if (!data || data.length === 0) {
+        console.log('⚠️ No data for pie chart');
+        
+        // Destroy existing chart jika ada
+        if (pieChart) {
+            pieChart.destroy();
+            pieChart = null;
+        }
+        
+        // Show placeholder
+        const canvas = pieCtx;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#95a5a6';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('No data available', canvas.width/2, canvas.height/2);
+        
+        return;
+    }
+    
+    // Hitung distribusi metode trading
+    const methodCount = {};
+    
+    data.forEach(item => {
+        const method = item.metodeTrading || 'Unknown';
+        if (!methodCount[method]) {
+            methodCount[method] = 0;
+        }
+        methodCount[method]++;
+    });
+    
+    const methods = Object.keys(methodCount);
+    const methodData = methods.map(method => methodCount[method]);
+    
+    console.log('📊 Pie chart data:', { methods, counts: methodData });
+    
+    // Warna untuk chart
+    const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c', '#34495e'];
+    
+    const pieCanvas = pieCtx.getContext('2d');
+    
+    // Destroy existing chart
+    if (pieChart) {
+        pieChart.destroy();
+    }
+    
+    // Create new pie chart
+    pieChart = new Chart(pieCanvas, {
+        type: 'pie',
+        data: {
+            labels: methods,
+            datasets: [{
+                data: methodData,
+                backgroundColor: colors.slice(0, methods.length),
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                hoverOffset: 15
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            
+                            return `${label}: ${value} trades (${percentage}%)`;
+                        }
+                    }
+                }
+            },
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            }
+        }
+    });
+    
+    console.log('✅ Pie chart updated successfully');
+}
 // Bar Chart Implementation
 function updateBarChart(data) {
     console.log('📊 Updating bar chart with', data.length, 'items');
@@ -5486,6 +5596,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
