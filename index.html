@@ -126,6 +126,151 @@
                         <!-- Comparison data akan diisi oleh JavaScript -->
                     </div>
                 </div>
+
+                <!-- ===== PHASE 2: CHART CONTROLS & STOCK TABLE ===== -->
+
+                <!-- Chart Type Selector -->
+                <div class="chart-controls-section">
+                    <div class="chart-header">
+                        <h3>📈 Chart Analytics</h3>
+                        <div class="chart-type-selector">
+                            <button class="chart-type-btn active" data-chart-type="line">
+                                <span class="btn-icon">📈</span>
+                                Line Chart
+                            </button>
+                            <button class="chart-type-btn" data-chart-type="bar">
+                                <span class="btn-icon">📊</span>
+                                Bar Chart
+                            </button>
+                            <button class="chart-type-btn" data-chart-type="breakdown">
+                                <span class="btn-icon">🔍</span>
+                                Daily Breakdown
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Chart Period Info -->
+                    <div class="chart-period-info">
+                        <span id="chartPeriodText">Profit/Loss 7 hari terakhir</span>
+                        <span class="chart-data-info" id="chartDataInfo"></span>
+                    </div>
+                </div>
+                
+                <!-- Stock Performance Table -->
+                <div class="stock-table-section">
+                    <div class="section-header">
+                        <h3>📋 Top Performing Stocks</h3>
+                        <div class="table-controls">
+                            <button class="table-action-btn" id="refreshStockTable">
+                                <span class="btn-icon">🔄</span>
+                                Refresh
+                            </button>
+                            <button class="table-action-btn" id="exportStockTable">
+                                <span class="btn-icon">📥</span>
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="stockPerformanceTable">
+                            <thead>
+                                <tr>
+                                    <th data-sort="stock" class="sortable">
+                                        <span>STOCK</span>
+                                        <span class="sort-icon">↕️</span>
+                                    </th>
+                                    <th data-sort="trades" class="sortable">
+                                        <span>TRADES</span>
+                                        <span class="sort-icon">↕️</span>
+                                    </th>
+                                    <th data-sort="totalPL" class="sortable sort-desc">
+                                        <span>TOTAL P/L</span>
+                                        <span class="sort-icon">↓</span>
+                                    </th>
+                                    <th data-sort="winRate" class="sortable">
+                                        <span>WIN RATE</span>
+                                        <span class="sort-icon">↕️</span>
+                                    </th>
+                                    <th>ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stockTableBody">
+                                <!-- Data akan diisi oleh JavaScript -->
+                                <tr class="loading-row">
+                                    <td colspan="5" style="text-align: center;">
+                                        <div class="loading-spinner-small"></div>
+                                        Loading stock data...
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="5" class="table-footer">
+                                        <div class="footer-info">
+                                            <span id="tableSummary">Showing top 5 stocks by Total P/L</span>
+                                            <span class="record-count" id="stockCount">0 stocks</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Insights Panel -->
+                <div class="insights-section">
+                    <div class="section-header">
+                        <h3>💡 Trading Insights</h3>
+                        <button class="insights-refresh" id="refreshInsights">
+                            <span class="btn-icon">🎲</span>
+                            Generate New Insights
+                        </button>
+                    </div>
+                    
+                    <div class="insights-container">
+                        <div class="insight-card">
+                            <div class="insight-header">
+                                <span class="insight-icon">📈</span>
+                                <h4>Performance Highlights</h4>
+                            </div>
+                            <div class="insight-content" id="insightPerformance">
+                                <div class="loading-placeholder">
+                                    <div class="loading-bar"></div>
+                                    <div class="loading-bar"></div>
+                                    <div class="loading-bar"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="insight-card">
+                            <div class="insight-header">
+                                <span class="insight-icon">📊</span>
+                                <h4>Trading Patterns</h4>
+                            </div>
+                            <div class="insight-content" id="insightPatterns">
+                                <div class="loading-placeholder">
+                                    <div class="loading-bar"></div>
+                                    <div class="loading-bar"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="insight-card">
+                            <div class="insight-header">
+                                <span class="insight-icon">⚠️</span>
+                                <h4>Risk Indicators</h4>
+                            </div>
+                            <div class="insight-content" id="insightRisks">
+                                <div class="loading-placeholder">
+                                    <div class="loading-bar"></div>
+                                    <div class="loading-bar"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 
                                 
                 <div class="charts">
@@ -137,6 +282,18 @@
                         <h3>Distribusi Metode Trading</h3>
                         <canvas id="pieChart"></canvas>
                     </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="dashboard-actions">
+                    <button class="action-btn primary" id="viewDetailedReport">
+                        <span class="btn-icon">📄</span>
+                        View Detailed Report
+                    </button>
+                    <button class="action-btn secondary" id="exportDashboard">
+                        <span class="btn-icon">📥</span>
+                        Export Dashboard
+                    </button>
                 </div>
             </section>
 
@@ -548,6 +705,7 @@
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
