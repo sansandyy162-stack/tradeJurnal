@@ -24,6 +24,108 @@
             <!-- Home Section -->
             <section id="home" class="section active">
                 <h2>Ringkasan Trading</h2>
+
+                <!-- PHASE 1: DATE FILTER SECTION -->
+                <div class="date-filter-section">
+                    <h3>📅 Filter Periode Analisis</h3>
+                    
+                    <!-- Quick Filters -->
+                    <div class="quick-filters">
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-range="30days">30 Hari Terakhir</button>
+                            <button class="filter-btn" data-range="7days">7 Hari Terakhir</button>
+                            <button class="filter-btn" data-range="thismonth">Bulan Ini</button>
+                            <button class="filter-btn" data-range="lastmonth">Bulan Lalu</button>
+                            <button class="filter-btn" data-range="thisyear">Tahun Ini</button>
+                            <button class="filter-btn" data-range="all">Semua Data</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Custom Range -->
+                    <div class="custom-range">
+                        <div class="range-inputs">
+                            <div class="input-group">
+                                <label for="startDate">Dari:</label>
+                                <input type="date" id="startDate">
+                            </div>
+                            <div class="input-group">
+                                <label for="endDate">Sampai:</label>
+                                <input type="date" id="endDate">
+                            </div>
+                        </div>
+                        <div class="range-actions">
+                            <button id="applyDateFilter" class="btn-primary">Terapkan Filter</button>
+                            <button id="resetDateFilter" class="btn-secondary">Reset</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Applied Filter Display -->
+                    <div id="filterStatus" class="filter-status">
+                        <span id="filterText">Menampilkan semua data trading</span>
+                        <span id="filterInfo" class="filter-info"></span>
+                    </div>
+                </div>
+                
+                <!-- COMPARISON TOGGLE -->
+                <div class="comparison-toggle">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="compareToggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Tampilkan perbandingan dengan periode sebelumnya</span>
+                    </label>
+                </div>
+                
+                <!-- ENHANCED METRICS SECTION -->
+                <div class="metrics-section">
+                    <h3>📊 Performance Metrics</h3>
+                    <div class="metrics-grid">
+                        <!-- Row 1 -->
+                        <div class="metric-card">
+                            <div class="metric-label">TOTAL P/L</div>
+                            <div class="metric-value" id="filteredTotalPL">Rp 0</div>
+                            <div class="metric-trend" id="plTrend"></div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-label">WIN RATE</div>
+                            <div class="metric-value" id="filteredWinRate">0%</div>
+                            <div class="metric-trend" id="winRateTrend"></div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-label">TOTAL TRADES</div>
+                            <div class="metric-value" id="filteredTotalTrades">0</div>
+                            <div class="metric-trend" id="tradesTrend"></div>
+                        </div>
+                        
+                        <!-- Row 2 -->
+                        <div class="metric-card">
+                            <div class="metric-label">AVG PROFIT/TRADE</div>
+                            <div class="metric-value" id="filteredAvgProfit">Rp 0</div>
+                            <div class="metric-trend" id="avgProfitTrend"></div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-label">MAX PROFIT</div>
+                            <div class="metric-value" id="filteredMaxProfit">Rp 0</div>
+                            <div class="metric-trend" id="maxProfitTrend"></div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-label">MAX LOSS</div>
+                            <div class="metric-value" id="filteredMaxLoss">Rp 0</div>
+                            <div class="metric-trend" id="maxLossTrend"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- COMPARISON SECTION (Hidden by default) -->
+                <div id="comparisonSection" class="comparison-section" style="display: none;">
+                    <h4>🔄 Perbandingan dengan Periode Sebelumnya</h4>
+                    <div class="comparison-metrics">
+                        <!-- Comparison data akan diisi oleh JavaScript -->
+                    </div>
+                </div>
                 
                 <div class="summary-cards">
                     <div class="card">
@@ -464,6 +566,7 @@
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
