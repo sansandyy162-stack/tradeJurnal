@@ -3929,50 +3929,23 @@ function resetFilters() {
 }
 
 // Update summary di home
+// Update home summary (simplified - hanya untuk charts)
 function updateHomeSummary() {
-    const totalPLElement = document.getElementById('totalPL');
-    const winRateElement = document.getElementById('winRate');
-    const totalTradesElement = document.getElementById('totalTrades');
-    const maxProfitElement = document.getElementById('maxProfit');
+    console.log('📊 updateHomeSummary called');
     
-    if (!totalPLElement || !winRateElement || !totalTradesElement || !maxProfitElement) {
-        return;
-    }
-    
+    // Jika tidak ada data, clear charts
     if (tradingData.length === 0) {
-        totalPLElement.textContent = 'Rp 0';
-        winRateElement.textContent = '0%';
-        totalTradesElement.textContent = '0';
-        maxProfitElement.textContent = 'Rp 0';
-        
-        totalPLElement.className = 'pl-value';
-        maxProfitElement.className = 'pl-value';
-        
         if (lineChart) lineChart.destroy();
         if (pieChart) pieChart.destroy();
         return;
     }
     
-    // Hitung total profit/loss
-    const totalPL = tradingData.reduce((sum, item) => sum + item.profitLoss, 0);
-    totalPLElement.textContent = formatCurrency(totalPL);
-    totalPLElement.className = `pl-value ${totalPL >= 0 ? 'positive' : 'negative'}`;
+    // Update charts dengan data terfilter atau semua data
+    const dataToUse = dashboardState.currentFilteredData.length > 0 
+        ? dashboardState.currentFilteredData 
+        : tradingData;
     
-    // Hitung win rate
-    const winningTrades = tradingData.filter(item => item.profitLoss > 0).length;
-    const winRate = (winningTrades / tradingData.length) * 100;
-    winRateElement.textContent = `${winRate.toFixed(1)}%`;
-    
-    // Total trading
-    totalTradesElement.textContent = tradingData.length;
-    
-    // Profit terbesar
-    const maxProfit = Math.max(...tradingData.map(item => item.profitLoss));
-    maxProfitElement.textContent = formatCurrency(maxProfit);
-    maxProfitElement.className = `pl-value ${maxProfit >= 0 ? 'positive' : 'negative'}`;
-    
-    // Update chart
-    updateCharts();
+    updateCharts(dataToUse);
 }
 
 // Update chart (sama seperti sebelumnya)
@@ -4382,6 +4355,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
