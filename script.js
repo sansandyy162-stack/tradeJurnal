@@ -1526,11 +1526,36 @@ function updateFilterStatusDisplay() {
 }
 
 // Apply date filter
+// Apply date filter - UPDATE
 function applyDateFilter() {
     console.log('🚀 applyDateFilter called');
+    console.log('Current mode:', dashboardState.dateRange.mode);
     
     const state = dashboardState.dateRange;
     let filteredData = [];
+    
+    // Validasi: Jika custom mode tapi tanggal kosong, fallback ke quick filter
+    if (state.mode === 'custom') {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        if (!startDate || !endDate) {
+            console.log('⚠️ Custom mode but dates empty, falling back to quick filter');
+            state.mode = 'quick';
+            state.quickFilter = state.quickFilter || '30days';
+            
+            // Update UI
+            const quickBtn = document.querySelector(`[data-range="${state.quickFilter}"]`);
+            if (quickBtn) {
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                quickBtn.classList.add('active');
+            }
+            
+            highlightQuickFilter();
+        }
+    }
     
     // Filter data berdasarkan mode
     if (state.mode === 'quick') {
@@ -1548,6 +1573,9 @@ function applyDateFilter() {
             console.log('📅 Quick filter dates:', dates);
             filteredData = filterDataByDateRange(tradingData, dates.startDate, dates.endDate);
         }
+        
+        // Update UI untuk quick mode
+        highlightQuickFilter();
         
     } else if (state.mode === 'custom') {
         console.log('🔧 Applying custom filter');
@@ -1570,6 +1598,9 @@ function applyDateFilter() {
         state.startDate = startDate;
         state.endDate = endDate;
         filteredData = filterDataByDateRange(tradingData, startDate, endDate);
+        
+        // Update UI untuk custom mode
+        highlightCustomRange(true);
     }
     
     state.applied = true;
@@ -1603,6 +1634,7 @@ function applyDateFilter() {
 }
 
 // Reset date filter
+// Reset date filter - UPDATE
 function resetDateFilter() {
     console.log('🔄 resetDateFilter called');
     
@@ -1627,8 +1659,26 @@ function resetDateFilter() {
         defaultBtn.classList.add('active');
     }
     
-    document.getElementById('startDate').value = '';
-    document.getElementById('endDate').value = '';
+    // Reset date inputs
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    if (startDate) {
+        startDate.value = '';
+        startDate.disabled = false;
+        startDate.style.cursor = 'text';
+        startDate.style.backgroundColor = '#ffffff';
+    }
+    
+    if (endDate) {
+        endDate.value = '';
+        endDate.disabled = false;
+        endDate.style.cursor = 'text';
+        endDate.style.backgroundColor = '#ffffff';
+    }
+    
+    // Reset UI mode
+    highlightQuickFilter();
     
     // Update display dengan semua data
     updateFilteredMetrics(tradingData);
@@ -1730,6 +1780,7 @@ function saveDashboardState() {
 }
 
 // Load dashboard state from localStorage
+// Load dashboard state from localStorage - UPDATE
 function loadDashboardState() {
     try {
         const saved = localStorage.getItem('dashboardState');
@@ -1741,11 +1792,8 @@ function loadDashboardState() {
             
             console.log('📂 Dashboard state loaded from localStorage:', dashboardState);
             
-            // Apply loaded state
-            if (dashboardState.dateRange.applied) {
-                // Akan diapply setelah data loaded
-                console.log('🔄 Saved filter will be applied after data load');
-            }
+            // Restore UI berdasarkan saved state
+            restoreUIFromState();
             
             // Restore comparison toggle
             const compareToggle = document.getElementById('compareToggle');
@@ -1759,7 +1807,39 @@ function loadDashboardState() {
     }
 }
 
+// Helper: Restore UI dari saved state
+function restoreUIFromState() {
+    const state = dashboardState.dateRange;
+    
+    // Restore quick filter buttons
+    if (state.mode === 'quick' && state.quickFilter) {
+        const quickBtn = document.querySelector(`[data-range="${state.quickFilter}"]`);
+        if (quickBtn) {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            quickBtn.classList.add('active');
+            highlightQuickFilter();
+        }
+    }
+    
+    // Restore date inputs jika custom mode
+    if (state.mode === 'custom' && state.startDate && state.endDate) {
+        const startInput = document.getElementById('startDate');
+        const endInput = document.getElementById('endDate');
+        
+        if (startInput) startInput.value = state.startDate;
+        if (endInput) endInput.value = state.endDate;
+        
+        highlightCustomRange(true);
+    }
+    
+    // ENABLE semua inputs
+    enableDateInputs();
+}
+
 // Initialize date pickers with default values
+// Initialize date pickers with default values - UPDATE
 function initializeDatePickers() {
     console.log('📅 initializeDatePickers called');
     
@@ -1771,25 +1851,64 @@ function initializeDatePickers() {
     const endDateInput = document.getElementById('endDate');
     
     if (startDateInput) {
-        startDateInput.value = formatDateToString(thirtyDaysAgo);
+        // Set default value (30 days ago)
+        const defaultStart = formatDateToString(thirtyDaysAgo);
+        startDateInput.value = defaultStart;
         startDateInput.max = formatDateToString(today);
-    }
-    
-    if (endDateInput) {
-        endDateInput.value = formatDateToString(today);
-        endDateInput.max = formatDateToString(today);
-        endDateInput.min = startDateInput ? startDateInput.value : '';
-    }
-    
-    // Update min/max ketika start date berubah
-    if (startDateInput && endDateInput) {
+        
+        // ENABLE input
+        startDateInput.disabled = false;
+        startDateInput.style.cursor = 'text';
+        startDateInput.style.backgroundColor = '#ffffff';
+        
+        // Auto-apply ketika user pilih tanggal
         startDateInput.addEventListener('change', function() {
-            endDateInput.min = this.value;
-            if (new Date(endDateInput.value) < new Date(this.value)) {
-                endDateInput.value = this.value;
+            console.log('📅 Start date changed to:', this.value);
+            
+            // Jika user pilih tanggal, auto-switch ke custom mode
+            if (dashboardState.dateRange.mode === 'quick') {
+                dashboardState.dateRange.mode = 'custom';
+                highlightCustomRange(true);
             }
         });
     }
+    
+    if (endDateInput) {
+        // Set default value (today)
+        const defaultEnd = formatDateToString(today);
+        endDateInput.value = defaultEnd;
+        endDateInput.max = formatDateToString(today);
+        
+        // ENABLE input
+        endDateInput.disabled = false;
+        endDateInput.style.cursor = 'text';
+        endDateInput.style.backgroundColor = '#ffffff';
+        
+        // Update min berdasarkan start date
+        if (startDateInput) {
+            endDateInput.min = startDateInput.value;
+            
+            // Auto-update min ketika start date berubah
+            startDateInput.addEventListener('change', function() {
+                endDateInput.min = this.value;
+                if (new Date(endDateInput.value) < new Date(this.value)) {
+                    endDateInput.value = this.value;
+                }
+            });
+        }
+        
+        endDateInput.addEventListener('change', function() {
+            console.log('📅 End date changed to:', this.value);
+            
+            // Jika user pilih tanggal, auto-switch ke custom mode
+            if (dashboardState.dateRange.mode === 'quick') {
+                dashboardState.dateRange.mode = 'custom';
+                highlightCustomRange(true);
+            }
+        });
+    }
+    
+    console.log('✅ Date pickers initialized and ENABLED');
 }
 
 // Setup event listeners untuk dashboard
@@ -1798,7 +1917,7 @@ function setupDashboardListeners() {
     
     // Quick filter buttons
     document.querySelectorAll('.filter-btn').forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function(e) {
             console.log('🎯 Quick filter clicked:', this.dataset.range);
             
             // Update active state
@@ -1811,41 +1930,74 @@ function setupDashboardListeners() {
             dashboardState.dateRange.mode = 'quick';
             dashboardState.dateRange.quickFilter = this.dataset.range;
             
-            // Switch to quick filter mode
-            document.querySelector('.custom-range').style.opacity = '0.7';
-            document.querySelector('.custom-range').style.pointerEvents = 'none';
+            // ENABLE INPUTS (FIX: Jangan disable)
+            enableDateInputs();
             
             // Apply filter
-            setTimeout(() => applyDateFilter(), 100);
+            applyDateFilter();
         });
     });
     
     // Custom range inputs focus
-    document.getElementById('startDate')?.addEventListener('focus', function() {
-        console.log('🎯 Custom range selected');
-        dashboardState.dateRange.mode = 'custom';
-        
-        // Update UI
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        
-        document.querySelector('.custom-range').style.opacity = '1';
-        document.querySelector('.custom-range').style.pointerEvents = 'auto';
-    });
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
     
-    document.getElementById('endDate')?.addEventListener('focus', function() {
-        console.log('🎯 Custom range selected');
-        dashboardState.dateRange.mode = 'custom';
-        
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('active');
+    if (startDateInput) {
+        startDateInput.addEventListener('focus', function() {
+            console.log('🎯 Custom range start date selected');
+            
+            // Update state to custom
+            dashboardState.dateRange.mode = 'custom';
+            
+            // Update UI untuk custom mode
+            highlightCustomRange(true);
+            
+            // ENABLE inputs
+            enableDateInputs();
         });
-    });
+        
+        startDateInput.addEventListener('change', function() {
+            // Auto-switch to custom mode ketika user pilih tanggal
+            if (dashboardState.dateRange.mode === 'quick') {
+                dashboardState.dateRange.mode = 'custom';
+                highlightCustomRange(true);
+            }
+        });
+    }
+    
+    if (endDateInput) {
+        endDateInput.addEventListener('focus', function() {
+            console.log('🎯 Custom range end date selected');
+            
+            // Update state to custom
+            dashboardState.dateRange.mode = 'custom';
+            
+            // Update UI untuk custom mode
+            highlightCustomRange(true);
+            
+            // ENABLE inputs
+            enableDateInputs();
+        });
+        
+        endDateInput.addEventListener('change', function() {
+            // Auto-switch to custom mode
+            if (dashboardState.dateRange.mode === 'quick') {
+                dashboardState.dateRange.mode = 'custom';
+                highlightCustomRange(true);
+            }
+        });
+    }
     
     // Apply filter button
     document.getElementById('applyDateFilter')?.addEventListener('click', function() {
         console.log('🎯 Apply filter button clicked');
+        
+        // Pastikan mode sesuai dengan input yang aktif
+        if (startDateInput?.value || endDateInput?.value) {
+            dashboardState.dateRange.mode = 'custom';
+            highlightCustomRange(true);
+        }
+        
         applyDateFilter();
     });
     
@@ -1866,6 +2018,62 @@ function setupDashboardListeners() {
     
     console.log('✅ Dashboard listeners setup complete');
 }
+
+// Helper: Enable date inputs dengan visual feedback yang benar
+function enableDateInputs() {
+    console.log('🔓 Enabling date inputs');
+    
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    if (startDate) {
+        startDate.disabled = false;
+        startDate.style.cursor = 'text';
+        startDate.style.backgroundColor = '#ffffff';
+        startDate.style.opacity = '1';
+    }
+    
+    if (endDate) {
+        endDate.disabled = false;
+        endDate.style.cursor = 'text';
+        endDate.style.backgroundColor = '#ffffff';
+        endDate.style.opacity = '1';
+    }
+}
+
+// Helper: Highlight custom range container
+function highlightCustomRange(highlight = true) {
+    const customRange = document.querySelector('.custom-range');
+    if (!customRange) return;
+    
+    if (highlight) {
+        // Visual feedback untuk custom mode
+        customRange.style.backgroundColor = '#e8f4fd';
+        customRange.style.border = '2px solid #3498db';
+        customRange.style.boxShadow = '0 0 0 2px rgba(52, 152, 219, 0.2)';
+        
+        // Remove active dari quick filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+    } else {
+        // Reset ke default
+        customRange.style.backgroundColor = '#f8f9fa';
+        customRange.style.border = '1px solid #e1e5e9';
+        customRange.style.boxShadow = 'none';
+    }
+}
+
+// Helper: Reset UI untuk quick filter mode
+function highlightQuickFilter() {
+    const customRange = document.querySelector('.custom-range');
+    if (customRange) {
+        customRange.style.backgroundColor = '#f8f9fa';
+        customRange.style.border = '1px solid #e1e5e9';
+        customRange.style.boxShadow = 'none';
+    }
+}
+
 
 // Inisialisasi aplikasi
 document.addEventListener('DOMContentLoaded', function() {
@@ -4174,6 +4382,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
