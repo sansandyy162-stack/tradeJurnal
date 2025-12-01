@@ -1309,6 +1309,7 @@ function filterDataByDateRange(data, startDate, endDate) {
 // Update filtered metrics display
 function updateFilteredMetrics(filteredData) {
     console.log('📊 updateFilteredMetrics called with', filteredData.length, 'items');
+    console.log('📊 updateFilteredMetrics called (with Phase 2 integration)');
     
     if (!filteredData || filteredData.length === 0) {
         console.log('ℹ️ No data to display');
@@ -1364,6 +1365,13 @@ function updateFilteredMetrics(filteredData) {
     // Update comparison jika aktif
     if (dashboardState.comparison.enabled && dashboardState.comparison.previousData) {
         updateComparisonMetrics(filteredData, dashboardState.comparison.previousData);
+    }
+
+    // Update Phase 2 components
+    if (typeof updateAllPhase2Components === 'function') {
+        setTimeout(() => {
+            updateAllPhase2Components();
+        }, 100);
     }
 }
 
@@ -2074,6 +2082,1290 @@ function highlightQuickFilter() {
     }
 }
 
+// State untuk chart dan table
+const chartState = {
+    type: 'line', // 'line', 'bar', 'breakdown'
+    data: null,
+    chartInstance: null,
+    dailyChartInstance: null // untuk chart breakdown
+};
+
+const stockTableState = {
+    sortBy: 'totalPL',
+    sortOrder: 'desc', // 'asc' or 'desc'
+    limit: 5, // Top 5 stocks
+    currentData: []
+};
+
+// Initialize Phase 2 features
+function initializePhase2Features() {
+    console.log('🚀 Initializing Phase 2 features');
+    
+    setupChartControls();
+    setupStockTable();
+    setupInsightsPanel();
+    setupDashboardActions();
+    
+    // Initial render setelah data loaded
+    setTimeout(() => {
+        updateAllPhase2Components();
+    }, 1000);
+}
+// Setup chart controls
+function setupChartControls() {
+    console.log('📈 Setting up chart controls');
+    
+    // Chart type buttons
+    document.querySelectorAll('.chart-type-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const chartType = this.dataset.chartType;
+            console.log('🎯 Chart type selected:', chartType);
+            
+            // Update active state
+            document.querySelectorAll('.chart-type-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // Update chart state
+            chartState.type = chartType;
+            
+            // Update chart
+            updateChartBasedOnType();
+            
+            // Update chart period info
+            updateChartPeriodInfo();
+        });
+    });
+    
+    console.log('✅ Chart controls setup complete');
+}
+
+// Update chart berdasarkan type
+function updateChartBasedOnType() {
+    console.log('🔄 Updating chart type to:', chartState.type);
+    
+    const dataToUse = dashboardState.currentFilteredData.length > 0 
+        ? dashboardState.currentFilteredData 
+        : tradingData;
+    
+    switch(chartState.type) {
+        case 'line':
+            updateLineChart(dataToUse);
+            break;
+        case 'bar':
+            updateBarChart(dataToUse);
+            break;
+        case 'breakdown':
+            updateDailyBreakdownChart(dataToUse);
+            break;
+        default:
+            updateLineChart(dataToUse);
+    }
+}
+
+// Enhanced Line Chart dengan date range support
+function updateLineChart(data) {
+    console.log('📈 Updating enhanced line chart with', data.length, 'items');
+    
+    if (!data || data.length === 0) {
+        console.log('⚠️ No data for line chart');
+        return;
+    }
+    
+    const lineCtx = document.getElementById('lineChart');
+    if (!lineCtx) {
+        console.error('❌ Line chart canvas not found');
+        return;
+    }
+    
+    // Group data per hari
+    const dailyData = {};
+    data.forEach(item => {
+        if (!item.tanggalMasuk) return;
+        
+        const day = item.tanggalMasuk.split('T')[0]; // Extract YYYY-MM-DD
+        if (!dailyData[day]) {
+            dailyData[day] = {
+                totalPL: 0,
+                trades: 0,
+                profitCount: 0,
+                lossCount: 0
+            };
+        }
+        
+        dailyData[day].totalPL += item.profitLoss || 0;
+        dailyData[day].trades += 1;
+        
+        if ((item.profitLoss || 0) > 0) {
+            dailyData[day].profitCount += 1;
+        } else if ((item.profitLoss || 0) < 0) {
+            dailyData[day].lossCount += 1;
+        }
+    });
+    
+    // Sort dates
+    const dates = Object.keys(dailyData).sort();
+    
+    // Calculate cumulative P/L
+    let cumulativePL = 0;
+    const cumulativeData = dates.map(date => {
+        cumulativePL += dailyData[date].totalPL;
+        return cumulativePL;
+    });
+    
+    // Daily P/L data
+    const dailyPL = dates.map(date => dailyData[date].totalPL);
+    
+    console.log('📊 Line chart data:', {
+        dates: dates.length,
+        range: dates.length > 0 ? `${dates[0]} to ${dates[dates.length-1]}` : 'No dates'
+    });
+    
+    const lineCanvas = lineCtx.getContext('2d');
+    
+    // Destroy existing chart
+    if (chartState.chartInstance) {
+        chartState.chartInstance.destroy();
+    }
+    
+    // Create new chart
+    chartState.chartInstance = new Chart(lineCanvas, {
+        type: 'line',
+        data: {
+            labels: dates.map(date => {
+                const d = new Date(date);
+                return d.toLocaleDateString('id-ID', { 
+                    day: 'numeric', 
+                    month: 'short' 
+                });
+            }),
+            datasets: [
+                {
+                    label: 'Cumulative P/L',
+                    data: cumulativeData,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y',
+                    pointBackgroundColor: '#3498db',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                },
+                {
+                    label: 'Daily P/L',
+                    data: dailyPL,
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                    tension: 0.3,
+                    fill: false,
+                    yAxisID: 'y1',
+                    borderDash: [5, 5],
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            
+                            if (context.datasetIndex === 0) {
+                                label += formatCurrency(context.raw);
+                            } else {
+                                const dateIndex = context.dataIndex;
+                                const date = dates[dateIndex];
+                                const dailyInfo = dailyData[date];
+                                
+                                label += formatCurrency(context.raw);
+                                label += ` (${dailyInfo.trades} trades, ${dailyInfo.profitCount}W/${dailyInfo.lossCount}L)`;
+                            }
+                            return label;
+                        },
+                        title: function(context) {
+                            const dateIndex = context[0].dataIndex;
+                            const date = new Date(dates[dateIndex]);
+                            return date.toLocaleDateString('id-ID', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                            });
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Cumulative P/L'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return formatCurrency(value).replace('Rp', 'Rp ');
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Daily P/L'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return formatCurrency(value).replace('Rp', 'Rp ');
+                        }
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
+    
+    console.log('✅ Line chart updated successfully');
+}
+
+// Bar Chart Implementation
+function updateBarChart(data) {
+    console.log('📊 Updating bar chart with', data.length, 'items');
+    
+    if (!data || data.length === 0) {
+        console.log('⚠️ No data for bar chart');
+        return;
+    }
+    
+    const lineCtx = document.getElementById('lineChart');
+    if (!lineCtx) return;
+    
+    // Group data per hari
+    const dailyData = {};
+    data.forEach(item => {
+        if (!item.tanggalMasuk) return;
+        
+        const day = item.tanggalMasuk.split('T')[0];
+        if (!dailyData[day]) {
+            dailyData[day] = {
+                totalPL: 0,
+                trades: 0,
+                profit: 0,
+                loss: 0
+            };
+        }
+        
+        const pl = item.profitLoss || 0;
+        dailyData[day].totalPL += pl;
+        dailyData[day].trades += 1;
+        
+        if (pl > 0) {
+            dailyData[day].profit += pl;
+        } else {
+            dailyData[day].loss += Math.abs(pl);
+        }
+    });
+    
+    // Sort dates
+    const dates = Object.keys(dailyData).sort();
+    const dailyPL = dates.map(date => dailyData[date].totalPL);
+    const profits = dates.map(date => dailyData[date].profit);
+    const losses = dates.map(date => -dailyData[date].loss); // Negative untuk chart
+    
+    const lineCanvas = lineCtx.getContext('2d');
+    
+    // Destroy existing chart
+    if (chartState.chartInstance) {
+        chartState.chartInstance.destroy();
+    }
+    
+    // Create bar chart
+    chartState.chartInstance = new Chart(lineCanvas, {
+        type: 'bar',
+        data: {
+            labels: dates.map(date => {
+                const d = new Date(date);
+                return d.toLocaleDateString('id-ID', { 
+                    day: 'numeric', 
+                    month: 'short' 
+                });
+            }),
+            datasets: [
+                {
+                    label: 'Profit',
+                    data: profits,
+                    backgroundColor: 'rgba(46, 204, 113, 0.7)',
+                    borderColor: '#27ae60',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Loss',
+                    data: losses,
+                    backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                    borderColor: '#c0392b',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Net P/L',
+                    data: dailyPL,
+                    type: 'line',
+                    borderColor: '#3498db',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            label += formatCurrency(context.raw);
+                            
+                            if (context.datasetIndex === 2) { // Net P/L
+                                const dateIndex = context.dataIndex;
+                                const date = dates[dateIndex];
+                                label += ` (${dailyData[date].trades} trades)`;
+                            }
+                            
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    }
+                },
+                y: {
+                    stacked: false,
+                    ticks: {
+                        callback: function(value) {
+                            return formatCurrency(value).replace('Rp', 'Rp ');
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Profit/Loss'
+                    }
+                }
+            }
+        }
+    });
+    
+    console.log('✅ Bar chart updated successfully');
+}
+
+// Daily Breakdown Chart
+function updateDailyBreakdownChart(data) {
+    console.log('🔍 Updating daily breakdown chart with', data.length, 'items');
+    
+    // For now, use bar chart as breakdown
+    updateBarChart(data);
+    
+    // TODO: Implement detailed breakdown chart in Phase 3
+    console.log('📝 Daily breakdown chart - using bar chart for now');
+}
+
+// Update chart period info
+function updateChartPeriodInfo() {
+    console.log('📅 Updating chart period info');
+    
+    const periodText = document.getElementById('chartPeriodText');
+    const dataInfo = document.getElementById('chartDataInfo');
+    
+    if (!periodText || !dataInfo) return;
+    
+    const state = dashboardState.dateRange;
+    const data = dashboardState.currentFilteredData.length > 0 
+        ? dashboardState.currentFilteredData 
+        : tradingData;
+    
+    let periodLabel = '';
+    let infoText = '';
+    
+    if (state.applied && state.startDate && state.endDate) {
+        const start = new Date(state.startDate);
+        const end = new Date(state.endDate);
+        
+        const startStr = start.toLocaleDateString('id-ID', { 
+            day: 'numeric', 
+            month: 'short' 
+        });
+        const endStr = end.toLocaleDateString('id-ID', { 
+            day: 'numeric', 
+            month: 'short',
+            year: 'numeric'
+        });
+        
+        periodLabel = `${chartState.type === 'line' ? 'Trend' : 'Performance'} ${startStr} - ${endStr}`;
+        infoText = `${data.length} trades`;
+        
+    } else {
+        periodLabel = 'All Time Performance';
+        infoText = `${data.length} total trades`;
+    }
+    
+    // Add chart type
+    const chartTypes = {
+        'line': 'Line Chart',
+        'bar': 'Bar Chart', 
+        'breakdown': 'Daily Breakdown'
+    };
+    
+    periodText.textContent = `${chartTypes[chartState.type]} - ${periodLabel}`;
+    dataInfo.textContent = infoText;
+    
+    console.log('✅ Chart period info updated:', periodLabel);
+}
+
+// Setup stock table
+function setupStockTable() {
+    console.log('📋 Setting up stock table');
+    
+    // Sortable headers
+    document.querySelectorAll('#stockPerformanceTable th.sortable').forEach(th => {
+        th.addEventListener('click', function() {
+            const sortBy = this.dataset.sort;
+            console.log('🎯 Sorting by:', sortBy);
+            
+            // Toggle sort order
+            if (stockTableState.sortBy === sortBy) {
+                stockTableState.sortOrder = stockTableState.sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                stockTableState.sortBy = sortBy;
+                stockTableState.sortOrder = 'desc'; // Default descending
+            }
+            
+            // Update UI
+            updateSortIcons();
+            
+            // Update table
+            updateStockTable();
+        });
+    });
+    
+    // Refresh button
+    document.getElementById('refreshStockTable')?.addEventListener('click', function() {
+        console.log('🔄 Refreshing stock table');
+        updateStockTable();
+    });
+    
+    // Export button
+    document.getElementById('exportStockTable')?.addEventListener('click', function() {
+        console.log('📥 Exporting stock table');
+        exportStockTable();
+    });
+    
+    console.log('✅ Stock table setup complete');
+}
+
+// Update stock table
+function updateStockTable() {
+    console.log('🔄 Updating stock table');
+    
+    const data = dashboardState.currentFilteredData.length > 0 
+        ? dashboardState.currentFilteredData 
+        : tradingData;
+    
+    if (!data || data.length === 0) {
+        renderEmptyStockTable();
+        return;
+    }
+    
+    // Analyze stock performance
+    const stockPerformance = analyzeStockPerformance(data);
+    
+    // Sort berdasarkan setting
+    const sortedStocks = sortStocks(stockPerformance, stockTableState.sortBy, stockTableState.sortOrder);
+    
+    // Limit to top N
+    const limitedStocks = sortedStocks.slice(0, stockTableState.limit);
+    
+    // Update state
+    stockTableState.currentData = limitedStocks;
+    
+    // Render table
+    renderStockTable(limitedStocks);
+    
+    // Update summary
+    updateTableSummary(limitedStocks, stockPerformance);
+    
+    console.log(`✅ Stock table updated: ${limitedStocks.length} stocks`);
+}
+
+// Analyze stock performance dari data
+function analyzeStockPerformance(data) {
+    console.log('🔍 Analyzing stock performance from', data.length, 'trades');
+    
+    const stockData = {};
+    
+    data.forEach(trade => {
+        const stock = trade.kodeSaham || 'UNKNOWN';
+        
+        if (!stockData[stock]) {
+            stockData[stock] = {
+                stock: stock,
+                trades: 0,
+                wins: 0,
+                losses: 0,
+                totalPL: 0,
+                totalProfit: 0,
+                totalLoss: 0,
+                profits: []
+            };
+        }
+        
+        const pl = trade.profitLoss || 0;
+        stockData[stock].trades += 1;
+        stockData[stock].totalPL += pl;
+        stockData[stock].profits.push(pl);
+        
+        if (pl > 0) {
+            stockData[stock].wins += 1;
+            stockData[stock].totalProfit += pl;
+        } else if (pl < 0) {
+            stockData[stock].losses += 1;
+            stockData[stock].totalLoss += Math.abs(pl);
+        }
+    });
+    
+    // Calculate additional metrics
+    const stocks = Object.values(stockData).map(stock => {
+        const winRate = stock.trades > 0 ? (stock.wins / stock.trades * 100) : 0;
+        const avgPL = stock.trades > 0 ? (stock.totalPL / stock.trades) : 0;
+        const bestTrade = Math.max(...stock.profits);
+        const worstTrade = Math.min(...stock.profits);
+        
+        return {
+            ...stock,
+            winRate: winRate,
+            avgPL: avgPL,
+            bestTrade: bestTrade,
+            worstTrade: worstTrade
+        };
+    });
+    
+    console.log(`📊 Analyzed ${stocks.length} unique stocks`);
+    return stocks;
+}
+
+// Sort stocks berdasarkan criteria
+function sortStocks(stocks, sortBy, order) {
+    console.log(`🔀 Sorting stocks by ${sortBy} (${order})`);
+    
+    return [...stocks].sort((a, b) => {
+        let aValue, bValue;
+        
+        switch(sortBy) {
+            case 'stock':
+                aValue = a.stock;
+                bValue = b.stock;
+                return order === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+                
+            case 'trades':
+                aValue = a.trades;
+                bValue = b.trades;
+                break;
+                
+            case 'totalPL':
+                aValue = a.totalPL;
+                bValue = b.totalPL;
+                break;
+                
+            case 'winRate':
+                aValue = a.winRate;
+                bValue = b.winRate;
+                break;
+                
+            default:
+                aValue = a.totalPL;
+                bValue = b.totalPL;
+        }
+        
+        return order === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+}
+
+// Render stock table
+function renderStockTable(stocks) {
+    console.log('🎨 Rendering stock table with', stocks.length, 'stocks');
+    
+    const tbody = document.getElementById('stockTableBody');
+    if (!tbody) {
+        console.error('❌ Stock table body not found');
+        return;
+    }
+    
+    if (stocks.length === 0) {
+        renderEmptyStockTable();
+        return;
+    }
+    
+    let html = '';
+    
+    stocks.forEach((stock, index) => {
+        const isPositive = stock.totalPL >= 0;
+        const plClass = isPositive ? 'positive' : 'negative';
+        const winRateClass = stock.winRate >= 50 ? 'positive' : 'negative';
+        
+        html += `
+            <tr class="stock-row" data-stock="${stock.stock}">
+                <td>
+                    <strong>${stock.stock}</strong>
+                    ${index === 0 && stock.totalPL > 0 ? ' 👑' : ''}
+                    ${index === stocks.length - 1 && stock.totalPL < 0 ? ' ⚠️' : ''}
+                </td>
+                <td>${stock.trades}</td>
+                <td class="${plClass}">${formatCurrency(stock.totalPL)}</td>
+                <td class="${winRateClass}">${stock.winRate.toFixed(1)}%</td>
+                <td>
+                    <button class="stock-action-btn view-stock" data-stock="${stock.stock}">
+                        View
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Add event listeners untuk view buttons
+    document.querySelectorAll('.view-stock').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const stock = this.dataset.stock;
+            console.log('👁️ View stock details:', stock);
+            viewStockDetails(stock);
+        });
+    });
+    
+    // Add click event untuk seluruh row
+    document.querySelectorAll('.stock-row').forEach(row => {
+        row.addEventListener('click', function() {
+            const stock = this.dataset.stock;
+            console.log('📊 Stock row clicked:', stock);
+            filterByStock(stock);
+        });
+    });
+    
+    console.log('✅ Stock table rendered');
+}
+
+// Render empty stock table
+function renderEmptyStockTable() {
+    console.log('📭 Rendering empty stock table');
+    
+    const tbody = document.getElementById('stockTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = `
+        <tr class="empty-row">
+            <td colspan="5" style="text-align: center; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
+                <h4 style="color: #7f8c8d; margin-bottom: 10px;">No Trading Data</h4>
+                <p style="color: #95a5a6;">Start trading to see stock performance analysis</p>
+            </td>
+        </tr>
+    `;
+}
+
+// Update table summary
+function updateTableSummary(displayedStocks, allStocks) {
+    console.log('📝 Updating table summary');
+    
+    const summaryEl = document.getElementById('tableSummary');
+    const countEl = document.getElementById('stockCount');
+    
+    if (!summaryEl || !countEl) return;
+    
+    if (displayedStocks.length === 0) {
+        summaryEl.textContent = 'No trading data available';
+        countEl.textContent = '0 stocks';
+        return;
+    }
+    
+    // Hitung metrics
+    const totalPL = displayedStocks.reduce((sum, stock) => sum + stock.totalPL, 0);
+    const avgWinRate = displayedStocks.reduce((sum, stock) => sum + stock.winRate, 0) / displayedStocks.length;
+    const bestStock = displayedStocks[0]; // Already sorted
+    
+    let summaryText = `Top ${displayedStocks.length} stocks by ${stockTableState.sortBy}`;
+    
+    if (stockTableState.sortBy === 'totalPL' && bestStock) {
+        summaryText += ` | Best: ${bestStock.stock} (${formatCurrency(bestStock.totalPL)})`;
+    }
+    
+    summaryEl.textContent = summaryText;
+    countEl.textContent = `${allStocks.length} total stocks`;
+}
+
+// Update sort icons
+function updateSortIcons() {
+    console.log('🎯 Updating sort icons');
+    
+    document.querySelectorAll('#stockPerformanceTable th.sortable').forEach(th => {
+        const sortIcon = th.querySelector('.sort-icon');
+        if (!sortIcon) return;
+        
+        // Reset semua
+        th.classList.remove('sort-asc', 'sort-desc');
+        sortIcon.textContent = '↕️';
+        
+        // Set active sort
+        if (th.dataset.sort === stockTableState.sortBy) {
+            th.classList.add(`sort-${stockTableState.sortOrder}`);
+            sortIcon.textContent = stockTableState.sortOrder === 'asc' ? '↑' : '↓';
+        }
+    });
+}
+
+// View stock details
+function viewStockDetails(stock) {
+    console.log('🔍 Viewing stock details:', stock);
+    
+    // Filter data untuk stock ini
+    const data = dashboardState.currentFilteredData.length > 0 
+        ? dashboardState.currentFilteredData 
+        : tradingData;
+    
+    const stockData = data.filter(item => item.kodeSaham === stock);
+    
+    if (stockData.length === 0) {
+        showNotification('warning', '⚠️ No Data', `No trading data found for ${stock}`, true);
+        return;
+    }
+    
+    // Tampilkan modal atau navigate ke report dengan filter
+    const stockPerformance = analyzeStockPerformance(stockData)[0];
+    
+    let message = `📊 ${stock} Performance\n\n`;
+    message += `Total Trades: ${stockPerformance.trades}\n`;
+    message += `Win Rate: ${stockPerformance.winRate.toFixed(1)}%\n`;
+    message += `Total P/L: ${formatCurrency(stockPerformance.totalPL)}\n`;
+    message += `Avg P/L per Trade: ${formatCurrency(stockPerformance.avgPL)}\n`;
+    message += `Best Trade: ${formatCurrency(stockPerformance.bestTrade)}\n`;
+    message += `Worst Trade: ${formatCurrency(stockPerformance.worstTrade)}\n\n`;
+    
+    if (stockPerformance.totalProfit > 0) {
+        message += `Total Profit: ${formatCurrency(stockPerformance.totalProfit)}\n`;
+    }
+    if (stockPerformance.totalLoss > 0) {
+        message += `Total Loss: ${formatCurrency(-stockPerformance.totalLoss)}\n`;
+    }
+    
+    showNotification('info', `📈 ${stock} Analysis`, message, false);
+}
+
+// Filter by stock
+function filterByStock(stock) {
+    console.log('🎯 Filtering by stock:', stock);
+    
+    // Navigate ke Report tab dengan filter stock
+    showSection('report');
+    
+    // Set filter value
+    setTimeout(() => {
+        const filterInput = document.getElementById('filterSaham');
+        if (filterInput) {
+            filterInput.value = stock;
+            applyFilters();
+        }
+        
+        showNotification('info', '🔍 Filter Applied', 
+            `Showing all trades for ${stock} in Report section.`, true);
+    }, 300);
+}
+
+// Export stock table
+function exportStockTable() {
+    console.log('💾 Exporting stock table');
+    
+    if (stockTableState.currentData.length === 0) {
+        showNotification('warning', '⚠️ No Data', 'No stock data to export', true);
+        return;
+    }
+    
+    // Create CSV content
+    let csv = 'Stock,Trades,Total P/L,Win Rate,Avg P/L,Best Trade,Worst Trade\n';
+    
+    stockTableState.currentData.forEach(stock => {
+        csv += `"${stock.stock}",`;
+        csv += `${stock.trades},`;
+        csv += `${stock.totalPL},`;
+        csv += `${stock.winRate.toFixed(2)},`;
+        csv += `${stock.avgPL.toFixed(0)},`;
+        csv += `${stock.bestTrade},`;
+        csv += `${stock.worstTrade}\n`;
+    });
+    
+    // Create download link
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `stock-performance-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log('✅ Stock table exported');
+    showNotification('success', '✅ Exported', 'Stock performance data exported as CSV', true);
+}
+
+// Setup insights panel
+function setupInsightsPanel() {
+    console.log('💡 Setting up insights panel');
+    
+    // Refresh insights button
+    document.getElementById('refreshInsights')?.addEventListener('click', function() {
+        console.log('🔄 Refreshing insights');
+        generateInsights();
+    });
+    
+    // Initial generation
+    setTimeout(() => {
+        generateInsights();
+    }, 1500);
+    
+    console.log('✅ Insights panel setup complete');
+}
+
+// Generate insights
+function generateInsights() {
+    console.log('🧠 Generating insights');
+    
+    const data = dashboardState.currentFilteredData.length > 0 
+        ? dashboardState.currentFilteredData 
+        : tradingData;
+    
+    if (!data || data.length === 0) {
+        renderEmptyInsights();
+        return;
+    }
+    
+    const insights = analyzeForInsights(data);
+    renderInsights(insights);
+    
+    console.log('✅ Insights generated');
+}
+
+// Analyze data for insights
+function analyzeForInsights(data) {
+    console.log('🔍 Analyzing data for insights from', data.length, 'trades');
+    
+    if (data.length === 0) {
+        return {
+            performance: ['No trading data available'],
+            patterns: ['Start trading to get insights'],
+            risks: ['No risk data available']
+        };
+    }
+    
+    // Hitung basic metrics
+    const totalPL = data.reduce((sum, item) => sum + (item.profitLoss || 0), 0);
+    const totalTrades = data.length;
+    const winningTrades = data.filter(item => (item.profitLoss || 0) > 0).length;
+    const losingTrades = data.filter(item => (item.profitLoss || 0) < 0).length;
+    const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+    
+    // Analyze by day
+    const dailyData = {};
+    data.forEach(item => {
+        if (!item.tanggalMasuk) return;
+        const date = new Date(item.tanggalMasuk);
+        const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+        
+        if (!dailyData[day]) {
+            dailyData[day] = { count: 0, totalPL: 0 };
+        }
+        dailyData[day].count += 1;
+        dailyData[day].totalPL += item.profitLoss || 0;
+    });
+    
+    // Find best/worst day
+    let bestDay = null;
+    let worstDay = null;
+    let highestAvgPL = -Infinity;
+    let lowestAvgPL = Infinity;
+    
+    Object.entries(dailyData).forEach(([day, info]) => {
+        const avgPL = info.count > 0 ? info.totalPL / info.count : 0;
+        if (avgPL > highestAvgPL) {
+            highestAvgPL = avgPL;
+            bestDay = parseInt(day);
+        }
+        if (avgPL < lowestAvgPL) {
+            lowestAvgPL = avgPL;
+            worstDay = parseInt(day);
+        }
+    });
+    
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Analyze stock concentration
+    const stockData = {};
+    data.forEach(item => {
+        const stock = item.kodeSaham || 'UNKNOWN';
+        if (!stockData[stock]) {
+            stockData[stock] = { count: 0, totalPL: 0 };
+        }
+        stockData[stock].count += 1;
+        stockData[stock].totalPL += item.profitLoss || 0;
+    });
+    
+    // Sort stocks by total PL
+    const sortedStocks = Object.entries(stockData)
+        .sort(([,a], [,b]) => b.totalPL - a.totalPL);
+    
+    const topStocks = sortedStocks.slice(0, 3);
+    const topStocksPL = topStocks.reduce((sum, [,data]) => sum + data.totalPL, 0);
+    const topStocksPercentage = totalPL !== 0 ? (topStocksPL / totalPL * 100) : 0;
+    
+    // Find best/worst trade
+    const bestTrade = Math.max(...data.map(item => item.profitLoss || 0));
+    const worstTrade = Math.min(...data.map(item => item.profitLoss || 0));
+    
+    // Analyze profit/loss ratio
+    const profitableTrades = data.filter(item => (item.profitLoss || 0) > 0);
+    const losingTradesData = data.filter(item => (item.profitLoss || 0) < 0);
+    
+    const avgWin = profitableTrades.length > 0 
+        ? profitableTrades.reduce((sum, item) => sum + (item.profitLoss || 0), 0) / profitableTrades.length 
+        : 0;
+    const avgLoss = losingTradesData.length > 0 
+        ? losingTradesData.reduce((sum, item) => sum + Math.abs(item.profitLoss || 0), 0) / losingTradesData.length 
+        : 0;
+    
+    const profitLossRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? '∞' : 0;
+    
+    // Generate insights
+    const insights = {
+        performance: [],
+        patterns: [],
+        risks: []
+    };
+    
+    // Performance insights
+    if (totalPL > 0) {
+        insights.performance.push(`✅ Net profit: ${formatCurrency(totalPL)} from ${totalTrades} trades`);
+        insights.performance.push(`🎯 Win rate: ${winRate.toFixed(1)}% (${winningTrades}W/${losingTrades}L)`);
+    } else if (totalPL < 0) {
+        insights.performance.push(`⚠️ Net loss: ${formatCurrency(totalPL)} from ${totalTrades} trades`);
+        insights.performance.push(`🎯 Win rate: ${winRate.toFixed(1)}% (${winningTrades}W/${losingTrades}L)`);
+    } else {
+        insights.performance.push(`📊 Break even: ${totalTrades} trades with no net P/L`);
+    }
+    
+    if (bestTrade > 0) {
+        insights.performance.push(`🏆 Best trade: ${formatCurrency(bestTrade)}`);
+    }
+    if (worstTrade < 0) {
+        insights.performance.push(`💥 Worst trade: ${formatCurrency(worstTrade)}`);
+    }
+    
+    // Pattern insights
+    if (bestDay !== null && dailyData[bestDay].count >= 2) {
+        insights.patterns.push(`📈 Best performing day: ${dayNames[bestDay]} (avg ${formatCurrency(dailyData[bestDay].totalPL / dailyData[bestDay].count)}/trade)`);
+    }
+    
+    if (worstDay !== null && dailyData[worstDay].count >= 2) {
+        insights.patterns.push(`📉 Worst performing day: ${dayNames[worstDay]} (avg ${formatCurrency(dailyData[worstDay].totalPL / dailyData[worstDay].count)}/trade)`);
+    }
+    
+    if (topStocks.length > 0 && topStocksPercentage > 50) {
+        insights.patterns.push(`🎯 Top ${topStocks.length} stocks contributed ${topStocksPercentage.toFixed(0)}% of total P/L`);
+    }
+    
+    if (profitLossRatio > 1.5) {
+        insights.patterns.push(`💰 Avg win (${formatCurrency(avgWin)}) is ${profitLossRatio.toFixed(1)}× larger than avg loss`);
+    } else if (profitLossRatio < 1 && profitLossRatio > 0) {
+        insights.patterns.push(`⚖️ Avg win (${formatCurrency(avgWin)}) is ${profitLossRatio.toFixed(1)}× of avg loss - consider risk management`);
+    }
+    
+    // Risk insights
+    if (avgLoss > avgWin * 1.5 && avgLoss > 0) {
+        insights.risks.push(`⚠️ Average loss (${formatCurrency(avgLoss)}) is ${(avgLoss/avgWin).toFixed(1)}× larger than average win`);
+    }
+    
+    if (losingTrades > winningTrades * 1.5 && losingTrades > 3) {
+        insights.risks.push(`📉 More losing trades (${losingTrades}) than winning trades (${winningTrades})`);
+    }
+    
+    if (Math.abs(worstTrade) > Math.abs(bestTrade) * 2 && worstTrade < 0) {
+        insights.risks.push(`💥 Largest loss (${formatCurrency(Math.abs(worstTrade))}) is ${(Math.abs(worstTrade)/bestTrade).toFixed(1)}× larger than biggest win`);
+    }
+    
+    // Add general tips jika insights kurang
+    if (insights.performance.length < 2) {
+        insights.performance.push('📊 Track more trades for detailed insights');
+    }
+    
+    if (insights.patterns.length < 2) {
+        insights.patterns.push('🔍 Trade more consistently to identify patterns');
+    }
+    
+    if (insights.risks.length < 2) {
+        insights.risks.push('🎯 Maintain 1:2 risk-reward ratio for better results');
+        insights.risks.push('📈 Consider setting stop-loss for risk management');
+    }
+    
+    console.log('📊 Insights analysis complete');
+    return insights;
+}
+
+// Render insights
+function renderInsights(insights) {
+    console.log('🎨 Rendering insights');
+    
+    const performanceEl = document.getElementById('insightPerformance');
+    const patternsEl = document.getElementById('insightPatterns');
+    const risksEl = document.getElementById('insightRisks');
+    
+    if (!performanceEl || !patternsEl || !risksEl) {
+        console.error('❌ Insight elements not found');
+        return;
+    }
+    
+    // Render performance insights
+    performanceEl.innerHTML = insights.performance.map(item => 
+        `<div class="insight-item ${item.includes('✅') ? 'positive' : item.includes('⚠️') ? 'negative' : ''}">${item}</div>`
+    ).join('');
+    
+    // Render pattern insights
+    patternsEl.innerHTML = insights.patterns.map(item => 
+        `<div class="insight-item ${item.includes('📈') ? 'positive' : item.includes('📉') ? 'negative' : ''}">${item}</div>`
+    ).join('');
+    
+    // Render risk insights
+    risksEl.innerHTML = insights.risks.map(item => 
+        `<div class="insight-item warning">${item}</div>`
+    ).join('');
+    
+    console.log('✅ Insights rendered');
+}
+
+// Render empty insights
+function renderEmptyInsights() {
+    console.log('📭 Rendering empty insights');
+    
+    const performanceEl = document.getElementById('insightPerformance');
+    const patternsEl = document.getElementById('insightPatterns');
+    const risksEl = document.getElementById('insightRisks');
+    
+    if (!performanceEl || !patternsEl || !risksEl) return;
+    
+    performanceEl.innerHTML = '<div class="insight-item">No trading data available</div>';
+    patternsEl.innerHTML = '<div class="insight-item">Start trading to get insights</div>';
+    risksEl.innerHTML = '<div class="insight-item">No risk data available</div>';
+}
+
+// Setup dashboard actions
+function setupDashboardActions() {
+    console.log('🔗 Setting up dashboard actions');
+    
+    // View detailed report
+    document.getElementById('viewDetailedReport')?.addEventListener('click', function() {
+        console.log('📄 View detailed report clicked');
+        navigateToDetailedReport();
+    });
+    
+    // Export dashboard
+    document.getElementById('exportDashboard')?.addEventListener('click', function() {
+        console.log('📥 Export dashboard clicked');
+        exportDashboard();
+    });
+    
+    console.log('✅ Dashboard actions setup complete');
+}
+
+// Navigate to detailed report
+function navigateToDetailedReport() {
+    console.log('📍 Navigating to detailed report');
+    
+    // Navigate ke Report section
+    showSection('report');
+    
+    // Apply current filter jika ada
+    const state = dashboardState.dateRange;
+    if (state.applied && state.startDate && state.endDate) {
+        setTimeout(() => {
+            const startDate = state.startDate;
+            const endDate = state.endDate;
+            
+            // TODO: Apply filter di Report section
+            console.log('🔍 Applying date filter to report:', { startDate, endDate });
+            
+            showNotification('info', '🔍 Filter Applied', 
+                `Date filter (${startDate} to ${endDate}) applied to report.`, true);
+        }, 500);
+    }
+}
+
+// Export dashboard
+function exportDashboard() {
+    console.log('💾 Exporting dashboard');
+    
+    // Create dashboard snapshot
+    const snapshot = {
+        timestamp: new Date().toISOString(),
+        dateRange: dashboardState.dateRange,
+        metrics: {
+            totalPL: parseFloat(document.getElementById('filteredTotalPL')?.textContent.replace(/[^0-9.-]+/g, '') || 0),
+            winRate: parseFloat(document.getElementById('filteredWinRate')?.textContent.replace('%', '') || 0),
+            totalTrades: parseInt(document.getElementById('filteredTotalTrades')?.textContent || 0)
+        },
+        topStocks: stockTableState.currentData,
+        insights: getCurrentInsights()
+    };
+    
+    // Create export content
+    const exportContent = createDashboardExport(snapshot);
+    
+    // Download
+    const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dashboard-export-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log('✅ Dashboard exported');
+    showNotification('success', '✅ Exported', 'Dashboard data exported successfully', true);
+}
+
+// Get current insights text
+function getCurrentInsights() {
+    const performance = document.getElementById('insightPerformance');
+    const patterns = document.getElementById('insightPatterns');
+    const risks = document.getElementById('insightRisks');
+    
+    return {
+        performance: performance ? performance.innerText : '',
+        patterns: patterns ? patterns.innerText : '',
+        risks: risks ? risks.innerText : ''
+    };
+}
+
+// Create dashboard export content
+function createDashboardExport(snapshot) {
+    let content = '=== TRADING DASHBOARD EXPORT ===\n';
+    content += `Export Date: ${new Date(snapshot.timestamp).toLocaleString('id-ID')}\n`;
+    content += '=================================\n\n';
+    
+    // Date Range
+    content += '📅 DATE RANGE:\n';
+    if (snapshot.dateRange.applied && snapshot.dateRange.startDate && snapshot.dateRange.endDate) {
+        content += `   ${snapshot.dateRange.startDate} to ${snapshot.dateRange.endDate}\n`;
+        if (snapshot.dateRange.mode === 'quick') {
+            content += `   Quick Filter: ${snapshot.dateRange.quickFilter}\n`;
+        }
+    } else {
+        content += '   All Time Data\n';
+    }
+    content += '\n';
+    
+    // Performance Metrics
+    content += '📊 PERFORMANCE METRICS:\n';
+    content += `   Total P/L: ${formatCurrency(snapshot.metrics.totalPL)}\n`;
+    content += `   Win Rate: ${snapshot.metrics.winRate}%\n`;
+    content += `   Total Trades: ${snapshot.metrics.totalTrades}\n`;
+    content += '\n';
+    
+    // Top Stocks
+    content += '📋 TOP PERFORMING STOCKS:\n';
+    if (snapshot.topStocks && snapshot.topStocks.length > 0) {
+        snapshot.topStocks.forEach((stock, index) => {
+            content += `   ${index + 1}. ${stock.stock}: ${formatCurrency(stock.totalPL)} (${stock.winRate.toFixed(1)}% WR, ${stock.trades} trades)\n`;
+        });
+    } else {
+        content += '   No stock data available\n';
+    }
+    content += '\n';
+    
+    // Insights
+    content += '💡 TRADING INSIGHTS:\n';
+    content += 'Performance:\n';
+    content += snapshot.insights.performance.split('\n').map(line => `   ${line}`).join('\n');
+    content += '\n\nPatterns:\n';
+    content += snapshot.insights.patterns.split('\n').map(line => `   ${line}`).join('\n');
+    content += '\n\nRisks:\n';
+    content += snapshot.insights.risks.split('\n').map(line => `   ${line}`).join('\n');
+    content += '\n\n=================================\n';
+    content += 'Exported from Trading Journal App\n';
+    
+    return content;
+}
+
+// Update all Phase 2 components
+function updateAllPhase2Components() {
+    console.log('🔄 Updating all Phase 2 components');
+    
+    // Update chart
+    updateChartBasedOnType();
+    updateChartPeriodInfo();
+    
+    // Update stock table
+    updateStockTable();
+    
+    // Update insights
+    generateInsights();
+    
+    console.log('✅ All Phase 2 components updated');
+}
+
+
+
 
 // Inisialisasi aplikasi
 document.addEventListener('DOMContentLoaded', function() {
@@ -2129,32 +3421,19 @@ async function initializeApp() {
         setupPerformanceTabs();
         
         // Final UI updates
-        updatePendingBadge();
-        // PHASE 1: Initialize dashboard
-        console.log('🔧 Initializing dashboard features...');
-        loadDashboardState();
-        initializeDatePickers();
-        setupDashboardListeners();
-        
-        // Apply saved filter jika ada
-        if (dashboardState.dateRange.applied && tradingData.length > 0) {
-            console.log('🔄 Applying saved filter state...');
-            setTimeout(() => {
-                applyDateFilter();
-            }, 500);
-        } else {
-            // Set default filtered data
-            dashboardState.currentFilteredData = [...tradingData];
-            updateFilteredMetrics(tradingData);
-        }
+        updatePendingBadge();        
         updateManualSyncButton();
+        
+         // ===== PHASE 2 INITIALIZATION =====
+        console.log('🚀 Initializing Phase 2 features...');
+        initializePhase2Features();
         
         updateLoadingProgress(100, 'Selesai!');
         
-        // Show success
+             // Show success
         setTimeout(() => {
             const successMsg = tradingData.length > 0 
-                ? `Berhasil memuat ${tradingData.length} data trading!`
+                ? `Berhasil memuat ${tradingData.length} data trading!` 
                 : 'Aplikasi siap digunakan!';
                 
             showLoadingSuccess(successMsg);
@@ -3948,170 +5227,22 @@ function updateHomeSummary() {
     updateCharts(dataToUse);
 }
 
-// Update chart (sama seperti sebelumnya)
-function updateCharts(filteredData = null) {
-    const dataToUse = filteredData || tradingData;
-    console.log('📈 updateCharts called with', dataToUse.length, 'items');
-     // Line chart - Profit/Loss 7 Hari Terakhir
-    const dailyData = {};
+function updateCharts(data = null) {
+    console.log('📈 updateCharts called (integrated with Phase 2)');
     
-    // Kelompokkan data per hari
-    tradingData.forEach(item => {
-        const day = item.tanggalMasuk;
-        if (!dailyData[day]) {
-            dailyData[day] = 0;
-        }
-        dailyData[day] += item.profitLoss;
-    });
+    const dataToUse = data || 
+                     (dashboardState.currentFilteredData.length > 0 ? dashboardState.currentFilteredData : tradingData);
     
-    // Urutkan tanggal dari terlama ke terbaru
-    const allDays = Object.keys(dailyData).sort();
-    const allDailyPL = allDays.map(day => dailyData[day]);
+    // Update line chart (existing chart)
+    updateLineChart(dataToUse);
     
-    // ⭐⭐ AMBIL 7 HARI TERAKHIR SAJA ⭐⭐
-    const last7Days = allDays.slice(-7);
-    const last7DaysPL = allDailyPL.slice(-7);
+    // Update pie chart (existing - tetap)
+    updatePieChart(dataToUse);
     
-    // Format label tanggal agar lebih readable
-    const formattedDays = last7Days.map(day => {
-        const date = new Date(day);
-        return date.toLocaleDateString('id-ID', { 
-            day: 'numeric', 
-            month: 'short' 
-        });
-    });
-    
-    const lineCtx = document.getElementById('lineChart');
-    if (!lineCtx) return;
-    
-    const lineCanvas = lineCtx.getContext('2d');
-    if (lineChart) lineChart.destroy();
-    
-    lineChart = new Chart(lineCanvas, {
-        type: 'line',
-        data: {
-            labels: formattedDays,
-            datasets: [{
-                label: 'Profit/Loss 7 Hari Terakhir',
-                data: last7DaysPL,
-                borderColor: '#3498db',
-                backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                tension: 0.4,
-                fill: true,
-                pointBackgroundColor: '#3498db',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
-                pointRadius: 5,
-                pointHoverRadius: 7
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `Profit/Loss: ${formatCurrency(context.raw)}`;
-                        },
-                        title: function(context) {
-                            // Kembalikan tanggal lengkap di tooltip
-                            const fullDate = new Date(last7Days[context[0].dataIndex]);
-                            return fullDate.toLocaleDateString('id-ID', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                            });
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return formatCurrency(value).replace('Rp', 'Rp ');
-                        },
-                        font: {
-                            size: 12
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(0,0,0,0.1)'
-                    },
-                    title: {
-                        display: true,
-                        text: 'Profit/Loss'
-                    }
-                },
-                x: {
-                    grid: {
-                        color: 'rgba(0,0,0,0.1)'
-                    },
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 45,
-                        font: {
-                            size: 11
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Tanggal'
-                    }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            }
-        }
-    });
-    
-    // Pie chart - Distribusi metode trading
-    const methodCount = {};
-    
-    tradingData.forEach(item => {
-        if (!methodCount[item.metodeTrading]) {
-            methodCount[item.metodeTrading] = 0;
-        }
-        methodCount[item.metodeTrading]++;
-    });
-    
-    const methods = Object.keys(methodCount);
-    const methodData = methods.map(method => methodCount[method]);
-    
-    const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c'];
-    
-    const pieCtx = document.getElementById('pieChart');
-    if (!pieCtx) return;
-    
-    const pieCanvas = pieCtx.getContext('2d');
-    if (pieChart) pieChart.destroy();
-    
-    pieChart = new Chart(pieCanvas, {
-        type: 'pie',
-        data: {
-            labels: methods,
-            datasets: [{
-                data: methodData,
-                backgroundColor: colors.slice(0, methods.length)
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
+    // Update Phase 2 components
+    if (typeof updateAllPhase2Components === 'function') {
+        updateAllPhase2Components();
+    }
 }
 
 // Fungsi untuk performance analysis (sama seperti sebelumnya)
@@ -4355,6 +5486,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
