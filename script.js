@@ -1308,19 +1308,31 @@ function filterDataByDateRange(data, startDate, endDate) {
 
 // Update filtered metrics display
 function updateFilteredMetrics(filteredData) {
-    console.log('📊 updateFilteredMetrics called with', filteredData.length, 'items');
-    console.log('📊 updateFilteredMetrics called (with Phase 2 integration)');
+    console.log('📊 updateFilteredMetrics called with', filteredData?.length || 0, 'items');
+    
+    // Debug: Check what data we're getting
+    console.log('🔍 First 3 items sample:', filteredData?.slice(0, 3));
+    
+    // Debug: Check if elements exist BEFORE trying to update
+    console.log('🔍 Checking elements before update:');
+    const elementIds = ['filteredTotalPL', 'filteredWinRate', 'filteredTotalTrades', 
+                       'filteredAvgProfit', 'filteredMaxProfit', 'filteredMaxLoss'];
+    
+    elementIds.forEach(id => {
+        const el = document.getElementById(id);
+        console.log(`   ${id}:`, el ? 'FOUND' : 'NOT FOUND');
+    });
     
     if (!filteredData || filteredData.length === 0) {
         console.log('ℹ️ No data to display');
         
-        // Reset semua metrics
-        document.getElementById('filteredTotalPL').textContent = 'Rp 0';
-        document.getElementById('filteredWinRate').textContent = '0%';
-        document.getElementById('filteredTotalTrades').textContent = '0';
-        document.getElementById('filteredAvgProfit').textContent = 'Rp 0';
-        document.getElementById('filteredMaxProfit').textContent = 'Rp 0';
-        document.getElementById('filteredMaxLoss').textContent = 'Rp 0';
+        // Reset semua metrics DENGAN ERROR HANDLING
+        safelyUpdateElement('filteredTotalPL', 'Rp 0', 'metric-value');
+        safelyUpdateElement('filteredWinRate', '0%', 'metric-value');
+        safelyUpdateElement('filteredTotalTrades', '0', 'metric-value');
+        safelyUpdateElement('filteredAvgProfit', 'Rp 0', 'metric-value');
+        safelyUpdateElement('filteredMaxProfit', 'Rp 0', 'metric-value');
+        safelyUpdateElement('filteredMaxLoss', 'Rp 0', 'metric-value');
         
         // Reset trends
         document.querySelectorAll('.metric-trend').forEach(el => {
@@ -1331,10 +1343,26 @@ function updateFilteredMetrics(filteredData) {
         return;
     }
     
-    // Hitung metrics
-    const totalPL = filteredData.reduce((sum, item) => sum + (item.profitLoss || 0), 0);
-    const totalTrades = filteredData.length;
-    const winningTrades = filteredData.filter(item => (item.profitLoss || 0) > 0).length;
+    // Hitung metrics DENGAN VALIDASI
+    let totalPL = 0;
+    let validItems = 0;
+    
+    filteredData.forEach(item => {
+        const pl = parseFloat(item.profitLoss);
+        if (!isNaN(pl)) {
+            totalPL += pl;
+            validItems++;
+        } else {
+            console.warn('⚠️ Invalid profitLoss:', item.profitLoss, 'in item:', item);
+        }
+    });
+    
+    const totalTrades = validItems;
+    const winningTrades = filteredData.filter(item => {
+        const pl = parseFloat(item.profitLoss);
+        return !isNaN(pl) && pl > 0;
+    }).length;
+    
     const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
     const avgProfit = totalTrades > 0 ? (totalPL / totalTrades) : 0;
     
@@ -1343,24 +1371,32 @@ function updateFilteredMetrics(filteredData) {
     let maxLoss = 0;
     
     filteredData.forEach(item => {
-        const pl = item.profitLoss || 0;
-        if (pl > maxProfit) maxProfit = pl;
-        if (pl < maxLoss) maxLoss = pl;
+        const pl = parseFloat(item.profitLoss);
+        if (!isNaN(pl)) {
+            if (pl > maxProfit) maxProfit = pl;
+            if (pl < maxLoss) maxLoss = pl;
+        }
     });
     
-    console.log('Calculated metrics:', {
-        totalPL, totalTrades, winningTrades, winRate, avgProfit, maxProfit, maxLoss
+    console.log('📈 Calculated metrics:', {
+        totalPL, 
+        totalTrades: `${validItems}/${filteredData.length} valid items`,
+        winningTrades, 
+        winRate, 
+        avgProfit, 
+        maxProfit, 
+        maxLoss
     });
     
-    // Update display
-    document.getElementById('filteredTotalPL').textContent = formatCurrency(totalPL);
-    document.getElementById('filteredTotalPL').className = `metric-value ${totalPL >= 0 ? 'positive' : 'negative'}`;
+    // Update display DENGAN SAFE FUNCTION
+    safelyUpdateElement('filteredTotalPL', formatCurrency(totalPL), 
+                       `metric-value ${totalPL >= 0 ? 'positive' : 'negative'}`);
     
-    document.getElementById('filteredWinRate').textContent = `${winRate.toFixed(1)}%`;
-    document.getElementById('filteredTotalTrades').textContent = totalTrades;
-    document.getElementById('filteredAvgProfit').textContent = formatCurrency(avgProfit);
-    document.getElementById('filteredMaxProfit').textContent = formatCurrency(maxProfit);
-    document.getElementById('filteredMaxLoss').textContent = formatCurrency(maxLoss);
+    safelyUpdateElement('filteredWinRate', `${winRate.toFixed(1)}%`, 'metric-value');
+    safelyUpdateElement('filteredTotalTrades', totalTrades.toString(), 'metric-value');
+    safelyUpdateElement('filteredAvgProfit', formatCurrency(avgProfit), 'metric-value');
+    safelyUpdateElement('filteredMaxProfit', formatCurrency(maxProfit), 'metric-value positive');
+    safelyUpdateElement('filteredMaxLoss', formatCurrency(maxLoss), 'metric-value negative');
     
     // Update comparison jika aktif
     if (dashboardState.comparison.enabled && dashboardState.comparison.previousData) {
@@ -3514,6 +3550,12 @@ async function initializeApp() {
         setupEventListeners();
         setupPositionTradingListeners();
         
+        // ===== FIX 1: INITIALIZE PHASE 1 DULU =====
+        console.log('🔧 Initializing Phase 1 dashboard features...');
+        loadDashboardState();
+        initializeDatePickers();
+        setupDashboardListeners();
+        
         // Load data from Google Sheets
         updateLoadingProgress(60, 'Mengambil data dari Google Sheets...');
         console.log('Memuat data dari Google Sheets...');
@@ -3524,23 +3566,71 @@ async function initializeApp() {
         updateLoadingProgress(80, 'Memproses data...');
         updateLoadingDetails(tradingData.length, pendingData.pending_count);
         
-        // Update displays
+        // ===== FIX 2: SET DEFAULT FILTERED DATA =====
+        console.log('📊 Setting default filtered data...');
+        dashboardState.currentFilteredData = [...tradingData];
+        
+        // ===== FIX 3: UPDATE PHASE 1 METRICS DULU =====
+        console.log('📈 Updating Phase 1 metrics...');
+        updateFilteredMetrics(tradingData);
+        updateFilterStatusDisplay();
+        
+        // ===== FIX 4: APPLY SAVED FILTER JIKA ADA =====
+        if (dashboardState.dateRange.applied && tradingData.length > 0) {
+            console.log('🔄 Applying saved filter state...');
+            
+            // Delay sedikit untuk pastikan UI ready
+            setTimeout(() => {
+                try {
+                    applyDateFilter();
+                    console.log('✅ Saved filter applied successfully');
+                } catch (error) {
+                    console.error('❌ Error applying saved filter:', error);
+                    // Fallback: Show all data
+                    updateFilteredMetrics(tradingData);
+                    updateFilterStatusDisplay();
+                }
+            }, 300);
+        } else {
+            // Show all data by default
+            console.log('ℹ️ No saved filter, showing all data');
+            updateFilteredMetrics(tradingData);
+            updateFilterStatusDisplay();
+        }
+        
+        // Update tampilan
         updateLoadingProgress(90, 'Menyiapkan tampilan...');
-        updateHomeSummary();
-        displayTradingData();
-        setupPerformanceTabs();
+        
+        // Update charts (ini akan trigger Phase 2 juga)
+        if (typeof updateCharts === 'function') {
+            updateCharts();
+        }
+        
+        if (typeof displayTradingData === 'function') {
+            displayTradingData();
+        }
+        
+        if (typeof setupPerformanceTabs === 'function') {
+            setupPerformanceTabs();
+        }
         
         // Final UI updates
-        updatePendingBadge();        
+        updatePendingBadge();
         updateManualSyncButton();
         
-         // ===== PHASE 2 INITIALIZATION =====
+        // ===== FIX 5: INITIALIZE PHASE 2 SETELAH PHASE 1 READY =====
         console.log('🚀 Initializing Phase 2 features...');
-        initializePhase2Features();
+        if (typeof initializePhase2Features === 'function') {
+            // Delay sedikit untuk pastikan Phase 1 sudah selesai
+            setTimeout(() => {
+                initializePhase2Features();
+                console.log('✅ Phase 2 features initialized');
+            }, 500);
+        }
         
         updateLoadingProgress(100, 'Selesai!');
         
-             // Show success
+        // Show success
         setTimeout(() => {
             const successMsg = tradingData.length > 0 
                 ? `Berhasil memuat ${tradingData.length} data trading!` 
@@ -5596,6 +5686,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
