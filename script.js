@@ -1177,7 +1177,695 @@ function enableEditForm() {
     }
 }
 
+// ===== PHASE 1: DASHBOARD ENHANCEMENTS =====
 
+// State untuk date filter
+const dashboardState = {
+    dateRange: {
+        mode: 'quick', // 'quick' | 'custom'
+        quickFilter: '30days', // '30days', '7days', 'thismonth', 'lastmonth', 'thisyear', 'all'
+        startDate: null,
+        endDate: null,
+        applied: false
+    },
+    comparison: {
+        enabled: false,
+        previousRange: null,
+        previousData: null
+    },
+    currentFilteredData: []
+};
+
+// Helper: Format tanggal ke YYYY-MM-DD
+function formatDateToString(date) {
+    console.log('🔄 formatDateToString called with:', date);
+    if (!date) return null;
+    
+    try {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (error) {
+        console.error('❌ Error formatting date:', error);
+        return null;
+    }
+}
+
+// Helper: Hitung tanggal berdasarkan quick filter
+function calculateQuickFilterDates(filterType) {
+    console.log('📅 calculateQuickFilterDates called for:', filterType);
+    
+    const today = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
+    
+    switch(filterType) {
+        case '30days':
+            startDate.setDate(today.getDate() - 30);
+            break;
+        case '7days':
+            startDate.setDate(today.getDate() - 7);
+            break;
+        case 'thismonth':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            break;
+        case 'lastmonth':
+            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            startDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+            endDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0);
+            break;
+        case 'thisyear':
+            startDate = new Date(today.getFullYear(), 0, 1);
+            break;
+        case 'all':
+            // Akan di-handle khusus
+            return { startDate: null, endDate: null };
+        default:
+            console.warn('⚠️ Unknown filter type:', filterType);
+            startDate.setDate(today.getDate() - 30);
+    }
+    
+    console.log('✅ Calculated dates:', { 
+        start: formatDateToString(startDate), 
+        end: formatDateToString(endDate) 
+    });
+    
+    return { 
+        startDate: formatDateToString(startDate), 
+        endDate: formatDateToString(endDate) 
+    };
+}
+
+// Fungsi utama: Filter data berdasarkan tanggal
+function filterDataByDateRange(data, startDate, endDate) {
+    console.log('🔍 filterDataByDateRange called');
+    console.log('Data count:', data.length);
+    console.log('Date range:', { startDate, endDate });
+    
+    // Jika tidak ada tanggal, kembalikan semua data
+    if (!startDate || !endDate) {
+        console.log('ℹ️ No date range, returning all data');
+        return [...data];
+    }
+    
+    const filtered = data.filter(item => {
+        const tradeDate = item.tanggalMasuk;
+        if (!tradeDate) {
+            console.warn('⚠️ Item tanpa tanggalMasuk:', item);
+            return false;
+        }
+        
+        try {
+            const itemDate = new Date(tradeDate);
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            // Set waktu ke tengah malam untuk akurasi
+            itemDate.setHours(0, 0, 0, 0);
+            start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+            
+            const isInRange = itemDate >= start && itemDate <= end;
+            
+            // Debug untuk beberapa item
+            if (data.length < 10) {
+                console.log(`Item ${item.kodeSaham} - ${tradeDate}: ${isInRange ? 'IN' : 'OUT'}`);
+            }
+            
+            return isInRange;
+            
+        } catch (error) {
+            console.error('❌ Error filtering item:', error, item);
+            return false;
+        }
+    });
+    
+    console.log(`✅ Filtered ${filtered.length} out of ${data.length} items`);
+    return filtered;
+}
+
+// Update filtered metrics display
+function updateFilteredMetrics(filteredData) {
+    console.log('📊 updateFilteredMetrics called with', filteredData.length, 'items');
+    
+    if (!filteredData || filteredData.length === 0) {
+        console.log('ℹ️ No data to display');
+        
+        // Reset semua metrics
+        document.getElementById('filteredTotalPL').textContent = 'Rp 0';
+        document.getElementById('filteredWinRate').textContent = '0%';
+        document.getElementById('filteredTotalTrades').textContent = '0';
+        document.getElementById('filteredAvgProfit').textContent = 'Rp 0';
+        document.getElementById('filteredMaxProfit').textContent = 'Rp 0';
+        document.getElementById('filteredMaxLoss').textContent = 'Rp 0';
+        
+        // Reset trends
+        document.querySelectorAll('.metric-trend').forEach(el => {
+            el.textContent = '';
+            el.className = 'metric-trend';
+        });
+        
+        return;
+    }
+    
+    // Hitung metrics
+    const totalPL = filteredData.reduce((sum, item) => sum + (item.profitLoss || 0), 0);
+    const totalTrades = filteredData.length;
+    const winningTrades = filteredData.filter(item => (item.profitLoss || 0) > 0).length;
+    const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+    const avgProfit = totalTrades > 0 ? (totalPL / totalTrades) : 0;
+    
+    // Temukan max profit dan max loss
+    let maxProfit = 0;
+    let maxLoss = 0;
+    
+    filteredData.forEach(item => {
+        const pl = item.profitLoss || 0;
+        if (pl > maxProfit) maxProfit = pl;
+        if (pl < maxLoss) maxLoss = pl;
+    });
+    
+    console.log('Calculated metrics:', {
+        totalPL, totalTrades, winningTrades, winRate, avgProfit, maxProfit, maxLoss
+    });
+    
+    // Update display
+    document.getElementById('filteredTotalPL').textContent = formatCurrency(totalPL);
+    document.getElementById('filteredTotalPL').className = `metric-value ${totalPL >= 0 ? 'positive' : 'negative'}`;
+    
+    document.getElementById('filteredWinRate').textContent = `${winRate.toFixed(1)}%`;
+    document.getElementById('filteredTotalTrades').textContent = totalTrades;
+    document.getElementById('filteredAvgProfit').textContent = formatCurrency(avgProfit);
+    document.getElementById('filteredMaxProfit').textContent = formatCurrency(maxProfit);
+    document.getElementById('filteredMaxLoss').textContent = formatCurrency(maxLoss);
+    
+    // Update comparison jika aktif
+    if (dashboardState.comparison.enabled && dashboardState.comparison.previousData) {
+        updateComparisonMetrics(filteredData, dashboardState.comparison.previousData);
+    }
+}
+
+// Update comparison metrics
+function updateComparisonMetrics(currentData, previousData) {
+    console.log('🔄 updateComparisonMetrics called');
+    
+    const currentMetrics = calculateMetrics(currentData);
+    const previousMetrics = calculateMetrics(previousData);
+    
+    // Update trends untuk setiap metric
+    updateTrendDisplay('plTrend', currentMetrics.totalPL, previousMetrics.totalPL, 'currency');
+    updateTrendDisplay('winRateTrend', currentMetrics.winRate, previousMetrics.winRate, 'percentage');
+    updateTrendDisplay('tradesTrend', currentMetrics.totalTrades, previousMetrics.totalTrades, 'count');
+    updateTrendDisplay('avgProfitTrend', currentMetrics.avgProfit, previousMetrics.avgProfit, 'currency');
+    updateTrendDisplay('maxProfitTrend', currentMetrics.maxProfit, previousMetrics.maxProfit, 'currency');
+    updateTrendDisplay('maxLossTrend', currentMetrics.maxLoss, previousMetrics.maxLoss, 'currency');
+}
+
+function calculateMetrics(data) {
+    if (!data || data.length === 0) {
+        return {
+            totalPL: 0,
+            winRate: 0,
+            totalTrades: 0,
+            avgProfit: 0,
+            maxProfit: 0,
+            maxLoss: 0
+        };
+    }
+    
+    const totalPL = data.reduce((sum, item) => sum + (item.profitLoss || 0), 0);
+    const totalTrades = data.length;
+    const winningTrades = data.filter(item => (item.profitLoss || 0) > 0).length;
+    const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+    const avgProfit = totalTrades > 0 ? (totalPL / totalTrades) : 0;
+    
+    let maxProfit = 0;
+    let maxLoss = 0;
+    
+    data.forEach(item => {
+        const pl = item.profitLoss || 0;
+        if (pl > maxProfit) maxProfit = pl;
+        if (pl < maxLoss) maxLoss = pl;
+    });
+    
+    return { totalPL, winRate, totalTrades, avgProfit, maxProfit, maxLoss };
+}
+
+function updateTrendDisplay(elementId, currentValue, previousValue, type = 'currency') {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    if (previousValue === 0 || previousValue === null) {
+        element.textContent = '';
+        element.className = 'metric-trend';
+        return;
+    }
+    
+    const difference = currentValue - previousValue;
+    const percentage = previousValue !== 0 ? (difference / Math.abs(previousValue)) * 100 : 0;
+    
+    let displayText = '';
+    
+    switch(type) {
+        case 'currency':
+            displayText = `${difference >= 0 ? '+' : ''}${formatCurrency(difference)}`;
+            break;
+        case 'percentage':
+            displayText = `${percentage >= 0 ? '+' : ''}${percentage.toFixed(1)}%`;
+            break;
+        case 'count':
+            displayText = `${difference >= 0 ? '+' : ''}${difference} trades`;
+            break;
+        default:
+            displayText = `${percentage >= 0 ? '+' : ''}${percentage.toFixed(1)}%`;
+    }
+    
+    element.textContent = displayText;
+    
+    // Set warna berdasarkan trend
+    if (difference > 0) {
+        element.className = 'metric-trend trend-up';
+    } else if (difference < 0) {
+        element.className = 'metric-trend trend-down';
+    } else {
+        element.className = 'metric-trend trend-neutral';
+    }
+}
+
+// Update filter status display
+function updateFilterStatusDisplay() {
+    console.log('🔄 updateFilterStatusDisplay called');
+    
+    const filterText = document.getElementById('filterText');
+    const filterInfo = document.getElementById('filterInfo');
+    
+    if (!filterText || !filterInfo) {
+        console.error('❌ Filter status elements not found');
+        return;
+    }
+    
+    const state = dashboardState.dateRange;
+    
+    if (!state.applied) {
+        filterText.textContent = 'Menampilkan semua data trading';
+        filterInfo.textContent = '';
+        return;
+    }
+    
+    if (state.mode === 'quick') {
+        const filterLabels = {
+            '30days': '30 Hari Terakhir',
+            '7days': '7 Hari Terakhir', 
+            'thismonth': 'Bulan Ini',
+            'lastmonth': 'Bulan Lalu',
+            'thisyear': 'Tahun Ini',
+            'all': 'Semua Data'
+        };
+        
+        filterText.textContent = `Filter: ${filterLabels[state.quickFilter]}`;
+        
+        if (state.startDate && state.endDate) {
+            const start = new Date(state.startDate);
+            const end = new Date(state.endDate);
+            
+            const startStr = start.toLocaleDateString('id-ID', { 
+                day: 'numeric', 
+                month: 'short' 
+            });
+            const endStr = end.toLocaleDateString('id-ID', { 
+                day: 'numeric', 
+                month: 'short',
+                year: 'numeric'
+            });
+            
+            filterInfo.textContent = `${startStr} - ${endStr}`;
+        }
+        
+    } else if (state.mode === 'custom') {
+        if (state.startDate && state.endDate) {
+            const start = new Date(state.startDate);
+            const end = new Date(state.endDate);
+            
+            const startStr = start.toLocaleDateString('id-ID', { 
+                day: 'numeric', 
+                month: 'short',
+                year: 'numeric'
+            });
+            const endStr = end.toLocaleDateString('id-ID', { 
+                day: 'numeric', 
+                month: 'short',
+                year: 'numeric'
+            });
+            
+            filterText.textContent = `Periode: ${startStr} - ${endStr}`;
+            filterInfo.textContent = `${dashboardState.currentFilteredData.length} trades`;
+        }
+    }
+}
+
+// Apply date filter
+function applyDateFilter() {
+    console.log('🚀 applyDateFilter called');
+    
+    const state = dashboardState.dateRange;
+    let filteredData = [];
+    
+    // Filter data berdasarkan mode
+    if (state.mode === 'quick') {
+        console.log('🔧 Applying quick filter:', state.quickFilter);
+        
+        if (state.quickFilter === 'all') {
+            filteredData = [...tradingData];
+            state.startDate = null;
+            state.endDate = null;
+        } else {
+            const dates = calculateQuickFilterDates(state.quickFilter);
+            state.startDate = dates.startDate;
+            state.endDate = dates.endDate;
+            
+            console.log('📅 Quick filter dates:', dates);
+            filteredData = filterDataByDateRange(tradingData, dates.startDate, dates.endDate);
+        }
+        
+    } else if (state.mode === 'custom') {
+        console.log('🔧 Applying custom filter');
+        
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        if (!startDate || !endDate) {
+            showNotification('error', '❌ Data Tidak Lengkap', 
+                'Harap pilih tanggal mulai dan tanggal akhir untuk filter custom.', false);
+            return;
+        }
+        
+        if (new Date(endDate) < new Date(startDate)) {
+            showNotification('error', '❌ Tanggal Tidak Valid', 
+                'Tanggal akhir tidak boleh sebelum tanggal mulai.', false);
+            return;
+        }
+        
+        state.startDate = startDate;
+        state.endDate = endDate;
+        filteredData = filterDataByDateRange(tradingData, startDate, endDate);
+    }
+    
+    state.applied = true;
+    dashboardState.currentFilteredData = filteredData;
+    
+    console.log(`✅ Applied filter: ${filteredData.length} items filtered`);
+    
+    // Update UI
+    updateFilteredMetrics(filteredData);
+    updateFilterStatusDisplay();
+    
+    // Update charts dengan data terfilter
+    updateCharts(filteredData);
+    
+    // Update comparison jika aktif
+    if (dashboardState.comparison.enabled) {
+        calculateComparisonData();
+    }
+    
+    // Save state to localStorage
+    saveDashboardState();
+    
+    // Show success notification
+    if (filteredData.length > 0) {
+        showNotification('success', '✅ Filter Diterapkan', 
+            `Menampilkan ${filteredData.length} trading dalam periode terpilih.`, true);
+    } else {
+        showNotification('warning', '⚠️ Tidak Ada Data', 
+            'Tidak ditemukan data trading dalam periode yang dipilih.', true);
+    }
+}
+
+// Reset date filter
+function resetDateFilter() {
+    console.log('🔄 resetDateFilter called');
+    
+    // Reset state
+    dashboardState.dateRange = {
+        mode: 'quick',
+        quickFilter: '30days',
+        startDate: null,
+        endDate: null,
+        applied: false
+    };
+    
+    dashboardState.currentFilteredData = [...tradingData];
+    
+    // Reset UI
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    const defaultBtn = document.querySelector('[data-range="30days"]');
+    if (defaultBtn) {
+        defaultBtn.classList.add('active');
+    }
+    
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    
+    // Update display dengan semua data
+    updateFilteredMetrics(tradingData);
+    updateFilterStatusDisplay();
+    
+    // Update charts dengan semua data
+    updateCharts(tradingData);
+    
+    // Reset comparison
+    if (dashboardState.comparison.enabled) {
+        dashboardState.comparison.previousData = null;
+        document.querySelectorAll('.metric-trend').forEach(el => {
+            el.textContent = '';
+            el.className = 'metric-trend';
+        });
+    }
+    
+    // Save state
+    saveDashboardState();
+    
+    showNotification('info', '🔄 Filter Direset', 'Menampilkan semua data trading.', true);
+}
+
+// Calculate comparison data
+function calculateComparisonData() {
+    console.log('🔍 calculateComparisonData called');
+    
+    const currentState = dashboardState.dateRange;
+    
+    if (!currentState.applied || !currentState.startDate || !currentState.endDate) {
+        console.log('⚠️ No current range to compare');
+        return;
+    }
+    
+    // Hitung previous period (same duration backwards)
+    const currentStart = new Date(currentState.startDate);
+    const currentEnd = new Date(currentState.endDate);
+    
+    const durationMs = currentEnd - currentStart;
+    const previousEnd = new Date(currentStart.getTime() - 1); // 1 ms sebelum start
+    const previousStart = new Date(previousEnd.getTime() - durationMs);
+    
+    console.log('📅 Comparison periods:', {
+        current: { start: currentState.startDate, end: currentState.endDate },
+        previous: { start: formatDateToString(previousStart), end: formatDateToString(previousEnd) }
+    });
+    
+    // Filter data untuk previous period
+    const previousData = filterDataByDateRange(
+        tradingData, 
+        formatDateToString(previousStart), 
+        formatDateToString(previousEnd)
+    );
+    
+    dashboardState.comparison.previousRange = {
+        start: formatDateToString(previousStart),
+        end: formatDateToString(previousEnd)
+    };
+    dashboardState.comparison.previousData = previousData;
+    
+    console.log(`✅ Previous period: ${previousData.length} items`);
+    
+    // Update comparison UI
+    updateComparisonMetrics(dashboardState.currentFilteredData, previousData);
+}
+
+// Toggle comparison
+function toggleComparison(enable) {
+    console.log(`🔄 toggleComparison: ${enable ? 'ON' : 'OFF'}`);
+    
+    dashboardState.comparison.enabled = enable;
+    
+    const comparisonSection = document.getElementById('comparisonSection');
+    if (comparisonSection) {
+        comparisonSection.style.display = enable ? 'block' : 'none';
+    }
+    
+    if (enable) {
+        calculateComparisonData();
+    } else {
+        // Clear trend displays
+        document.querySelectorAll('.metric-trend').forEach(el => {
+            el.textContent = '';
+            el.className = 'metric-trend';
+        });
+    }
+    
+    saveDashboardState();
+}
+
+// Save dashboard state to localStorage
+function saveDashboardState() {
+    try {
+        localStorage.setItem('dashboardState', JSON.stringify(dashboardState));
+        console.log('💾 Dashboard state saved to localStorage');
+    } catch (error) {
+        console.error('❌ Error saving dashboard state:', error);
+    }
+}
+
+// Load dashboard state from localStorage
+function loadDashboardState() {
+    try {
+        const saved = localStorage.getItem('dashboardState');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            
+            // Merge dengan default state
+            Object.assign(dashboardState, parsed);
+            
+            console.log('📂 Dashboard state loaded from localStorage:', dashboardState);
+            
+            // Apply loaded state
+            if (dashboardState.dateRange.applied) {
+                // Akan diapply setelah data loaded
+                console.log('🔄 Saved filter will be applied after data load');
+            }
+            
+            // Restore comparison toggle
+            const compareToggle = document.getElementById('compareToggle');
+            if (compareToggle) {
+                compareToggle.checked = dashboardState.comparison.enabled;
+                toggleComparison(dashboardState.comparison.enabled);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error loading dashboard state:', error);
+    }
+}
+
+// Initialize date pickers with default values
+function initializeDatePickers() {
+    console.log('📅 initializeDatePickers called');
+    
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    
+    if (startDateInput) {
+        startDateInput.value = formatDateToString(thirtyDaysAgo);
+        startDateInput.max = formatDateToString(today);
+    }
+    
+    if (endDateInput) {
+        endDateInput.value = formatDateToString(today);
+        endDateInput.max = formatDateToString(today);
+        endDateInput.min = startDateInput ? startDateInput.value : '';
+    }
+    
+    // Update min/max ketika start date berubah
+    if (startDateInput && endDateInput) {
+        startDateInput.addEventListener('change', function() {
+            endDateInput.min = this.value;
+            if (new Date(endDateInput.value) < new Date(this.value)) {
+                endDateInput.value = this.value;
+            }
+        });
+    }
+}
+
+// Setup event listeners untuk dashboard
+function setupDashboardListeners() {
+    console.log('🔧 Setting up dashboard listeners');
+    
+    // Quick filter buttons
+    document.querySelectorAll('.filter-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            console.log('🎯 Quick filter clicked:', this.dataset.range);
+            
+            // Update active state
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // Update state
+            dashboardState.dateRange.mode = 'quick';
+            dashboardState.dateRange.quickFilter = this.dataset.range;
+            
+            // Switch to quick filter mode
+            document.querySelector('.custom-range').style.opacity = '0.7';
+            document.querySelector('.custom-range').style.pointerEvents = 'none';
+            
+            // Apply filter
+            setTimeout(() => applyDateFilter(), 100);
+        });
+    });
+    
+    // Custom range inputs focus
+    document.getElementById('startDate')?.addEventListener('focus', function() {
+        console.log('🎯 Custom range selected');
+        dashboardState.dateRange.mode = 'custom';
+        
+        // Update UI
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        document.querySelector('.custom-range').style.opacity = '1';
+        document.querySelector('.custom-range').style.pointerEvents = 'auto';
+    });
+    
+    document.getElementById('endDate')?.addEventListener('focus', function() {
+        console.log('🎯 Custom range selected');
+        dashboardState.dateRange.mode = 'custom';
+        
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+    });
+    
+    // Apply filter button
+    document.getElementById('applyDateFilter')?.addEventListener('click', function() {
+        console.log('🎯 Apply filter button clicked');
+        applyDateFilter();
+    });
+    
+    // Reset filter button
+    document.getElementById('resetDateFilter')?.addEventListener('click', function() {
+        console.log('🎯 Reset filter button clicked');
+        resetDateFilter();
+    });
+    
+    // Comparison toggle
+    const compareToggle = document.getElementById('compareToggle');
+    if (compareToggle) {
+        compareToggle.addEventListener('change', function() {
+            console.log('🎯 Comparison toggle changed:', this.checked);
+            toggleComparison(this.checked);
+        });
+    }
+    
+    console.log('✅ Dashboard listeners setup complete');
+}
 
 // Inisialisasi aplikasi
 document.addEventListener('DOMContentLoaded', function() {
@@ -1234,6 +1922,23 @@ async function initializeApp() {
         
         // Final UI updates
         updatePendingBadge();
+        // PHASE 1: Initialize dashboard
+        console.log('🔧 Initializing dashboard features...');
+        loadDashboardState();
+        initializeDatePickers();
+        setupDashboardListeners();
+        
+        // Apply saved filter jika ada
+        if (dashboardState.dateRange.applied && tradingData.length > 0) {
+            console.log('🔄 Applying saved filter state...');
+            setTimeout(() => {
+                applyDateFilter();
+            }, 500);
+        } else {
+            // Set default filtered data
+            dashboardState.currentFilteredData = [...tradingData];
+            updateFilteredMetrics(tradingData);
+        }
         updateManualSyncButton();
         
         updateLoadingProgress(100, 'Selesai!');
@@ -3063,7 +3768,9 @@ function updateHomeSummary() {
 }
 
 // Update chart (sama seperti sebelumnya)
-function updateCharts() {
+function updateCharts(filteredData = null) {
+    const dataToUse = filteredData || tradingData;
+    console.log('📈 updateCharts called with', dataToUse.length, 'items');
      // Line chart - Profit/Loss 7 Hari Terakhir
     const dailyData = {};
     
@@ -3467,6 +4174,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
