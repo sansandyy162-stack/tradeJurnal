@@ -1102,76 +1102,136 @@ function showConfirmationModal(title, message) {
 // ⭐⭐ BARU: Fungsi untuk force update semua tampilan ⭐⭐
 function forceUpdateAllDisplays() {
     console.log('🔄 Force updating all displays...');
-
-    // 1. Refresh dashboard
-    refreshDashboard();
     
-    // 2. Update report table
+    // 1. Update report table
     displayTradingData();
     
-    // // 1. Update dashboard home
-    // updateHomeSummary();
-    // displayTradingData();
-    
-    // // 2. Update Phase 2 components jika ada
-    // if (typeof updateAllPhase2Components === 'function') {
-    //     setTimeout(() => {
-    //         updateAllPhase2Components();
-    //     }, 100);
-    // }
-    
-    // // 3. Update filter status jika ada filter aktif
-    // if (dashboardState.dateRange.applied) {
-    //     console.log('🔍 Re-applying current filter...');
-    //     applyDateFilter(); // Ini akan update chart dan metrics
-    // }
-    
-    // // 4. Update stock table
-    // if (typeof updateStockTable === 'function') {
-    //     setTimeout(() => {
-    //         updateStockTable();
-    //     }, 150);
-    // }
-    
-    // // 5. Update insights
-    // if (typeof generateInsights === 'function') {
-    //     setTimeout(() => {
-    //         generateInsights();
-    //     }, 200);
-    // }
+    // 2. ⭐⭐ PASTIKAN: Panggil hardRefreshDashboard ⭐⭐
+    if (typeof hardRefreshDashboard === 'function') {
+        hardRefreshDashboard();
+    } else {
+        // Fallback
+        updateHomeSummary();
+        updateFilterStatusDisplay();
+    }
     
     console.log('✅ All displays force updated');
 }
 
 // ⭐⭐ BARU: Fungsi untuk refresh dashboard ⭐⭐
+// ⭐⭐ BARU: Fungsi untuk refresh dashboard ⭐⭐
 function refreshDashboard() {
     console.log('🔄 Manual dashboard refresh triggered');
+    console.log('📊 Current tradingData length:', tradingData.length);
     
-    // 1. Reload data dari tradingData (data sudah update di memory)
+    // Debug: Tampilkan semua kode saham dalam tradingData
+    console.log('🔍 All stocks in tradingData:', 
+        tradingData.map(item => `${item.kodeSaham} (${item.id})`));
+    
+    // 1. Update dashboard state dengan data terkini
     const currentData = [...tradingData];
     
     // 2. Update filtered metrics
-    if (dashboardState.dateRange.applied) {
+    if (dashboardState.dateRange.applied && dashboardState.dateRange.startDate) {
+        console.log('📅 Applying saved filter:', dashboardState.dateRange);
         const filteredData = filterDataByDateRange(currentData, 
             dashboardState.dateRange.startDate, 
             dashboardState.dateRange.endDate);
+        console.log(`📊 Filtered data: ${filteredData.length} items`);
+        updateFilteredMetrics(filteredData);
+    } else {
+        console.log('📅 No filter applied, showing all data');
+        updateFilteredMetrics(currentData);
+    }
+    
+    // 3. Update charts
+    console.log('📈 Updating charts...');
+    updateCharts();
+    
+    // 4. Update Phase 2 components
+    if (typeof updateAllPhase2Components === 'function') {
+        console.log('🎯 Updating Phase 2 components...');
+        setTimeout(() => {
+            updateAllPhase2Components();
+        }, 100);
+    }
+    
+    // 5. Update filter status
+    console.log('📝 Updating filter status...');
+    updateFilterStatusDisplay();
+    
+    // 6. Force rebuild positions
+    console.log('🏗️ Rebuilding positions...');
+    rebuildPositionsFromData();
+    
+    // 7. Update pending badge
+    console.log('📛 Updating pending badge...');
+    updatePendingBadge();
+    
+    console.log('✅ Dashboard refreshed successfully');
+}
+// ⭐⭐ BARU: Hard refresh dashboard dengan rebuild data ⭐⭐
+function hardRefreshDashboard() {
+    console.log('💥 HARD REFRESH DASHBOARD - SMART VERSION');
+    
+    // 1. Pakai data yang SUDAH DIUPDATE di memory
+    const currentData = [...tradingData];
+    console.log(`📊 Using ${currentData.length} records from memory`);
+    
+    // 2. Debug: Tampilkan perubahan saham
+    const stockCount = {};
+    currentData.forEach(item => {
+        stockCount[item.kodeSaham] = (stockCount[item.kodeSaham] || 0) + 1;
+    });
+    console.log('🔍 Stock distribution:', stockCount);
+    
+    // 3. Reset dashboard state
+    dashboardState.currentFilteredData = [...currentData];
+    
+    // 4. Rebuild positions
+    rebuildPositionsFromData();
+    
+    // 5. Update metrics
+    if (dashboardState.dateRange.applied && dashboardState.dateRange.startDate) {
+        const filteredData = filterDataByDateRange(
+            currentData, 
+            dashboardState.dateRange.startDate, 
+            dashboardState.dateRange.endDate
+        );
         updateFilteredMetrics(filteredData);
     } else {
         updateFilteredMetrics(currentData);
     }
     
-    // 3. Update charts
-    updateCharts();
-    
-    // 4. Update Phase 2 components
-    if (typeof updateAllPhase2Components === 'function') {
-        updateAllPhase2Components();
-    }
-    
-    // 5. Update filter status
+    // 6. Update filter status
     updateFilterStatusDisplay();
     
-    console.log('✅ Dashboard refreshed successfully');
+    // 7. Update charts
+    updateCharts();
+    
+    // 8. ⭐⭐ YANG PALING PENTING: Force update Phase 2 components ⭐⭐
+    if (typeof updateAllPhase2Components === 'function') {
+        console.log('🎯 Scheduling Phase 2 update...');
+        setTimeout(() => {
+            console.log('🚀 Executing Phase 2 update...');
+            updateAllPhase2Components();
+        }, 300);
+    } else {
+        console.error('❌ updateAllPhase2Components function not found!');
+        // Fallback: Update stock table langsung
+        if (typeof updateStockTable === 'function') {
+            updateStockTable();
+        }
+    }
+    
+    // 9. Show notification
+    setTimeout(() => {
+        showNotification('success', '🔄 Dashboard Diperbarui', 
+            `Dashboard telah diperbarui.\n\nData: ${currentData.length} trading`, 
+            true);
+    }, 500);
+    
+    console.log('✅ Hard refresh completed');
 }
 
 // Test function untuk notification system
@@ -3598,17 +3658,32 @@ function createDashboardExport(snapshot) {
 
 // Update all Phase 2 components
 function updateAllPhase2Components() {
-    console.log('🔄 Updating all Phase 2 components');
+    console.log('🔄 updateAllPhase2Components called');
+
+     // Debug: Hitung jumlah trading per saham
+    const stockSummary = {};
+    tradingData.forEach(item => {
+        stockSummary[item.kodeSaham] = (stockSummary[item.kodeSaham] || 0) + 1;
+    });
+    console.log('📊 Stock summary:', stockSummary);
+
     
     // Update chart
     updateChartBasedOnType();
     updateChartPeriodInfo();
     
     // Update stock table
-    updateStockTable();
+    // 2. Update stock table
+    if (typeof updateStockTable === 'function') {
+        updateStockTable();
+    } else {
+        console.error('❌ updateStockTable function not found!');
+    }
     
     // Update insights
-    generateInsights();
+    if (typeof generateInsights === 'function') {
+        generateInsights();
+    }
     
     console.log('✅ All Phase 2 components updated');
 }
@@ -3633,6 +3708,7 @@ async function initializeApp() {
         // Setup systems
         updateLoadingProgress(20, 'Menyiapkan sistem sync...');
         setupAutoSync();
+        addDebugRefreshButton(); // ⭐⭐ BARU: Tambahkan tombol debug
         
         updateLoadingProgress(30, 'Menyiapkan UI...');
         setupStatusIndicator();
@@ -3859,26 +3935,20 @@ function showSection(sectionId) {
     
     // Jika pindah ke home, update summary dan chart
             // ⭐⭐ PERBAIKAN: Auto-refresh saat pindah ke home ⭐⭐
+    // ⭐⭐ PERBAIKAN: Auto-refresh saat pindah ke home ⭐⭐
     if (sectionId === 'home') {
-        console.log('🏠 Home section - refreshing dashboard...');
+        console.log('🏠 Home section - HARD refreshing dashboard...');
         
-        // Delay sedikit untuk pastikan UI sudah ready
+        // ⭐⭐ PERBAIKAN: Panggil hardRefreshDashboard ⭐⭐
         setTimeout(() => {
-            // Force update semua komponen dashboard
-            updateHomeSummary();
-            
-            // Update Phase 2 components jika ada
-            if (typeof updateAllPhase2Components === 'function') {
-                updateAllPhase2Components();
+            if (typeof hardRefreshDashboard === 'function') {
+                hardRefreshDashboard();
+            } else {
+                // Fallback
+                updateHomeSummary();
+                updateFilterStatusDisplay();
             }
-            
-            // Update filter jika aktif
-            if (dashboardState.dateRange.applied) {
-                applyDateFilter();
-            }
-            
-            console.log('✅ Home dashboard refreshed');
-        }, 300);
+        }, 500);
     }
     // if (sectionId === 'home') {
     //     updateHomeSummary();
@@ -5400,78 +5470,130 @@ function closeModal() {
 }
 
 // ⭐⭐ UPDATE handleEditSubmit() ⭐⭐
+// ⭐⭐ UPDATE handleEditSubmit() - VERSION FIXED ⭐⭐
 async function handleEditSubmit(event) {
     event.preventDefault();
+    
+    console.log('✏️ Edit form submitted');
     
     const id = document.getElementById('editId').value;
     const index = tradingData.findIndex(item => item.id === id);
     
-    if (index === -1) return;
+    if (index === -1) {
+        console.error('❌ Data not found for edit:', id);
+        showNotification('error', '❌ Data Tidak Ditemukan', 
+            'Data yang ingin diedit tidak ditemukan dalam sistem.', false);
+        return;
+    }
     
     // Validasi data
     const tanggalKeluar = document.getElementById('editTanggalKeluar').value;
     const tanggalMasuk = document.getElementById('editTanggalMasuk').value;
     
-    if (tanggalKeluar < tanggalMasuk) {
-        alert('Tanggal keluar tidak boleh sebelum tanggal masuk!');
+    if (tanggalKeluar && tanggalKeluar < tanggalMasuk) {
+        showNotification('error', '❌ Tanggal Tidak Valid', 
+            'Tanggal keluar tidak boleh sebelum tanggal masuk!\n\nSilakan periksa kembali tanggal yang dimasukkan.', false);
         return;
     }
     
     const lot = parseInt(document.getElementById('editLot').value);
     if (lot < 1) {
-        alert('Jumlah LOT minimal 1!');
+        showNotification('error', '❌ Jumlah LOT Invalid', 
+            'Jumlah LOT minimal 1!\n\nSilakan masukkan jumlah LOT yang valid.', false);
         return;
     }
+    
     // Tampilkan loading dan disable form
     showLoading('Mengupdate data di Google Sheets...');
     disableEditForm();
-    // Ambil nilai fee
-    const feeBuy = parseFloat(document.getElementById('editFeeBuy').value) || 0;
-    const feeSell = parseFloat(document.getElementById('editFeeSell').value) || 0;
     
-    // Hitung profit/loss
-    const calculation = calculateProfitLoss(
-        parseFloat(document.getElementById('editHargaMasuk').value),
-        parseFloat(document.getElementById('editHargaKeluar').value),
-        lot,
-        feeBuy,
-        feeSell
-    );
-    
-    // Update data
-    tradingData[index] = {
-        id: id,
-        tanggalMasuk: tanggalMasuk,
-        tanggalKeluar: tanggalKeluar,
-        kodeSaham: document.getElementById('editKodeSaham').value.toUpperCase(),
-        hargaMasuk: parseFloat(document.getElementById('editHargaMasuk').value),
-        hargaKeluar: parseFloat(document.getElementById('editHargaKeluar').value),
-        lot: lot,
-        feeBuy: calculation.feeBuy,
-        feeSell: calculation.feeSell,
-        totalFee: calculation.totalFee,
-        profitLoss: calculation.profitLoss,
-        metodeTrading: document.getElementById('editMetodeTrading').value,
-        catatan: document.getElementById('editCatatan').value,
-        positionData: null
-    };
-    
-    // Simpan perubahan
-    await saveData();
-    // Sembunyikan loading dan enable form
+    try {
+        // Ambil nilai fee
+        const feeBuy = parseFloat(document.getElementById('editFeeBuy').value) || 0;
+        const feeSell = parseFloat(document.getElementById('editFeeSell').value) || 0;
+        
+        // Hitung profit/loss
+        const calculation = calculateProfitLoss(
+            parseFloat(document.getElementById('editHargaMasuk').value),
+            parseFloat(document.getElementById('editHargaKeluar').value),
+            lot,
+            feeBuy,
+            feeSell
+        );
+        
+        // Simpan data lama untuk debug
+        const oldData = {...tradingData[index]};
+        
+        // Update data di array
+        tradingData[index] = {
+            id: id,
+            tanggalMasuk: tanggalMasuk,
+            tanggalKeluar: tanggalKeluar || '',
+            kodeSaham: document.getElementById('editKodeSaham').value.toUpperCase(),
+            hargaMasuk: parseFloat(document.getElementById('editHargaMasuk').value),
+            hargaKeluar: parseFloat(document.getElementById('editHargaKeluar').value) || 0,
+            lot: lot,
+            feeBuy: calculation.feeBuy,
+            feeSell: calculation.feeSell,
+            totalFee: calculation.totalFee,
+            profitLoss: calculation.profitLoss,
+            metodeTrading: document.getElementById('editMetodeTrading').value,
+            catatan: document.getElementById('editCatatan').value || '',
+            positionData: tradingData[index].positionData // Pertahankan positionData jika ada
+        };
+        
+        console.log('📝 Data edited successfully:');
+        console.log('Old:', oldData);
+        console.log('New:', tradingData[index]);
+        
+        // Simpan perubahan ke Google Sheets
+        const saveResult = await saveData();
+        
+        if (!saveResult) {
+            throw new Error('Gagal menyimpan ke Google Sheets');
+        }
+        
+        console.log('✅ Data saved to Google Sheets');
+        
+        // Tampilkan notifikasi sukses
+        showNotification('success', '✅ Data Diupdate!', 
+            `Data trading berhasil diupdate!\n\nKode Saham: ${tradingData[index].kodeSaham}\nProfit/Loss: ${formatCurrency(tradingData[index].profitLoss)}`, 
+            true);
+        
+        // ⭐⭐ PERBAIKAN UTAMA: Hard refresh dashboard ⭐⭐
+        console.log('🔄 Triggering hard refresh...');
+        
+        // Tutup modal
+        closeModal();
+        
+        // Delay sedikit lalu refresh dashboard
+        setTimeout(() => {
+            console.log('🔄 Executing hard refresh after edit...');
+            if (typeof hardRefreshDashboard === 'function') {
+                hardRefreshDashboard();
+            } else {
+                console.error('❌ hardRefreshDashboard function not found!');
+                // Fallback ke refresh biasa
+                updateHomeSummary();
+                displayTradingData();
+                
+                // Update Phase 2 jika ada
+                if (typeof updateAllPhase2Components === 'function') {
+                    updateAllPhase2Components();
+                }
+            }
+        }, 800);
+        
+    } catch (error) {
+        console.error('❌ Error in edit submission:', error);
+        showNotification('error', '❌ Gagal Mengupdate', 
+            `Gagal mengupdate data:\n\n${error.message}`, 
+            false);
+    } finally {
+        // Sembunyikan loading dan enable form
         hideLoading();
         enableEditForm();
-    // Tutup modal
-    closeModal();
-    
-    // Update tampilan
-    // ⭐⭐ PERBAIKAN: Force update semua tampilan ⭐⭐
-    forceUpdateAllDisplays();
-    // updateHomeSummary();
-    // displayTradingData();
-    
-   // alert('Data trading berhasil diupdate!');
-    showNotification('success', '✅ Data Diupdate!', 'Data trading berhasil diupdate dari sistem!', true);
+    }
 }
 
 // Hapus data trading
@@ -5816,46 +5938,48 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+// ⭐⭐ DEBUG: Tambahkan tombol refresh manual ⭐⭐
+function addDebugRefreshButton() {
+    if (document.getElementById('debug-refresh-btn')) return;
+    
+    const btn = document.createElement('button');
+    btn.id = 'debug-refresh-btn';
+    btn.innerHTML = '🔄 Debug Refresh';
+    btn.style.cssText = `
+        position: fixed;
+        bottom: 70px;
+        right: 20px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 9999;
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    `;
+    
+    btn.addEventListener('click', function() {
+        console.log('🔧 DEBUG: Manual refresh triggered');
+        console.log('📊 TradingData count:', tradingData.length);
+        console.log('📋 All data:', tradingData);
+        
+        // Panggil hard refresh
+        hardRefreshDashboard();
+        
+        // Show debug info
+        const stockCount = {};
+        tradingData.forEach(item => {
+            stockCount[item.kodeSaham] = (stockCount[item.kodeSaham] || 0) + 1;
+        });
+        
+        alert(`DEBUG INFO:\nTotal data: ${tradingData.length}\nStocks: ${JSON.stringify(stockCount)}`);
+    });
+    
+    document.body.appendChild(btn);
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// Panggil fungsi ini di initializeApp()
+// Tambahkan di dalam initializeApp(), setelah setupAutoSync()
