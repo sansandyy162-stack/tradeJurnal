@@ -804,6 +804,7 @@ async function smartSaveData() {
         updateHomeSummary();
         displayTradingData();
         updateManualSyncButton();
+        refreshDashboard();
         
         showOfflineSuccessNotification(pendingId);
         return { success: true, mode: 'offline', pendingId: pendingId };
@@ -878,6 +879,7 @@ async function smartSavePositionData(positionData) {
         // Update UI
         updateHomeSummary();
         displayTradingData();
+        refreshDashboard();
         
         showOfflineSuccessNotification(pendingId);
         return { success: true, mode: 'offline', pendingId: pendingId };
@@ -1097,6 +1099,80 @@ function showConfirmationModal(title, message) {
     });
 }
 
+// ⭐⭐ BARU: Fungsi untuk force update semua tampilan ⭐⭐
+function forceUpdateAllDisplays() {
+    console.log('🔄 Force updating all displays...');
+
+    // 1. Refresh dashboard
+    refreshDashboard();
+    
+    // 2. Update report table
+    displayTradingData();
+    
+    // // 1. Update dashboard home
+    // updateHomeSummary();
+    // displayTradingData();
+    
+    // // 2. Update Phase 2 components jika ada
+    // if (typeof updateAllPhase2Components === 'function') {
+    //     setTimeout(() => {
+    //         updateAllPhase2Components();
+    //     }, 100);
+    // }
+    
+    // // 3. Update filter status jika ada filter aktif
+    // if (dashboardState.dateRange.applied) {
+    //     console.log('🔍 Re-applying current filter...');
+    //     applyDateFilter(); // Ini akan update chart dan metrics
+    // }
+    
+    // // 4. Update stock table
+    // if (typeof updateStockTable === 'function') {
+    //     setTimeout(() => {
+    //         updateStockTable();
+    //     }, 150);
+    // }
+    
+    // // 5. Update insights
+    // if (typeof generateInsights === 'function') {
+    //     setTimeout(() => {
+    //         generateInsights();
+    //     }, 200);
+    // }
+    
+    console.log('✅ All displays force updated');
+}
+
+// ⭐⭐ BARU: Fungsi untuk refresh dashboard ⭐⭐
+function refreshDashboard() {
+    console.log('🔄 Manual dashboard refresh triggered');
+    
+    // 1. Reload data dari tradingData (data sudah update di memory)
+    const currentData = [...tradingData];
+    
+    // 2. Update filtered metrics
+    if (dashboardState.dateRange.applied) {
+        const filteredData = filterDataByDateRange(currentData, 
+            dashboardState.dateRange.startDate, 
+            dashboardState.dateRange.endDate);
+        updateFilteredMetrics(filteredData);
+    } else {
+        updateFilteredMetrics(currentData);
+    }
+    
+    // 3. Update charts
+    updateCharts();
+    
+    // 4. Update Phase 2 components
+    if (typeof updateAllPhase2Components === 'function') {
+        updateAllPhase2Components();
+    }
+    
+    // 5. Update filter status
+    updateFilterStatusDisplay();
+    
+    console.log('✅ Dashboard refreshed successfully');
+}
 
 // Test function untuk notification system
 function testNotificationSystem() {
@@ -3782,9 +3858,31 @@ function showSection(sectionId) {
     }
     
     // Jika pindah ke home, update summary dan chart
+            // ⭐⭐ PERBAIKAN: Auto-refresh saat pindah ke home ⭐⭐
     if (sectionId === 'home') {
-        updateHomeSummary();
+        console.log('🏠 Home section - refreshing dashboard...');
+        
+        // Delay sedikit untuk pastikan UI sudah ready
+        setTimeout(() => {
+            // Force update semua komponen dashboard
+            updateHomeSummary();
+            
+            // Update Phase 2 components jika ada
+            if (typeof updateAllPhase2Components === 'function') {
+                updateAllPhase2Components();
+            }
+            
+            // Update filter jika aktif
+            if (dashboardState.dateRange.applied) {
+                applyDateFilter();
+            }
+            
+            console.log('✅ Home dashboard refreshed');
+        }, 300);
     }
+    // if (sectionId === 'home') {
+    //     updateHomeSummary();
+    // }
     // Jika pindah ke performance, load data performance
     else if (sectionId === 'performance') {
         setTimeout(() => {
@@ -5367,10 +5465,13 @@ async function handleEditSubmit(event) {
     closeModal();
     
     // Update tampilan
-    updateHomeSummary();
-    displayTradingData();
+    // ⭐⭐ PERBAIKAN: Force update semua tampilan ⭐⭐
+    forceUpdateAllDisplays();
+    // updateHomeSummary();
+    // displayTradingData();
     
-    alert('Data trading berhasil diupdate!');
+   // alert('Data trading berhasil diupdate!');
+    showNotification('success', '✅ Data Diupdate!', 'Data trading berhasil diupdate dari sistem!', true);
 }
 
 // Hapus data trading
@@ -5398,8 +5499,10 @@ async function deleteTradingData(id) {
     hideLoading();
     
     // Update tampilan
-    updateHomeSummary();
-    displayTradingData();
+    // ⭐⭐ PERBAIKAN: Force update semua tampilan ⭐⭐
+    forceUpdateAllDisplays();
+    // updateHomeSummary();
+    // displayTradingData();
     
     showNotification('success', '✅ Data Dihapus', 'Data trading berhasil dihapus dari sistem!', true);
 }
@@ -5713,6 +5816,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
