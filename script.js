@@ -1306,6 +1306,33 @@ function filterDataByDateRange(data, startDate, endDate) {
     return filtered;
 }
 
+
+// HELPER FUNCTION: Safe element update
+function safelyUpdateElement(elementId, text, className = '') {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = text;
+        if (className) {
+            element.className = className;
+        }
+        console.log(`✅ Updated ${elementId}: ${text}`);
+    } else {
+        console.error(`❌ Element ${elementId} not found!`);
+        
+        // Try alternative ways to find
+        const altElement = document.querySelector(`[id*="${elementId}"]`);
+        if (altElement) {
+            altElement.textContent = text;
+            if (className) {
+                altElement.className = className;
+            }
+            console.log(`🔍 Found alternative for ${elementId}:`, altElement);
+        } else {
+            console.error(`🚨 Cannot find ${elementId} anywhere!`);
+        }
+    }
+}
+
 // Update filtered metrics display
 function updateFilteredMetrics(filteredData) {
     console.log('📊 updateFilteredMetrics called with', filteredData?.length || 0, 'items');
@@ -1411,31 +1438,6 @@ function updateFilteredMetrics(filteredData) {
     }
 }
 
-// HELPER FUNCTION: Safe element update
-function safelyUpdateElement(elementId, text, className = '') {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.textContent = text;
-        if (className) {
-            element.className = className;
-        }
-        console.log(`✅ Updated ${elementId}: ${text}`);
-    } else {
-        console.error(`❌ Element ${elementId} not found!`);
-        
-        // Try alternative ways to find
-        const altElement = document.querySelector(`[id*="${elementId}"]`);
-        if (altElement) {
-            altElement.textContent = text;
-            if (className) {
-                altElement.className = className;
-            }
-            console.log(`🔍 Found alternative for ${elementId}:`, altElement);
-        } else {
-            console.error(`🚨 Cannot find ${elementId} anywhere!`);
-        }
-    }
-}
 // Update comparison metrics
 function updateComparisonMetrics(currentData, previousData) {
     console.log('🔄 updateComparisonMetrics called');
@@ -5711,6 +5713,7 @@ function setupPerformanceTabs() {
     
     displaySahamPerformance();
 }
+
 
 
 
