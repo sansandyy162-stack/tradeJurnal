@@ -193,7 +193,26 @@ let portfolioData = {
     transactions: []
 };
 const PENDING_STORAGE_KEY = 'trading_pending_data';
-
+function initializePortfolioData() {
+    console.log('🎬 initializePortfolioData: Initializing portfolio module...');
+    
+    // Pastikan selalu ada default data
+    if (!portfolioData.summary) {
+        console.log('🆕 Setting default portfolio data...');
+        portfolioData.summary = {
+            totalTopUp: 0,
+            totalWithdraw: 0,
+            totalPL: 0,
+            totalEquity: 0,
+            availableCash: 0,
+            growthPercent: 0,
+            lastUpdated: new Date().toISOString()
+        };
+    }
+    
+    console.log('✅ Portfolio initialized. Current data:', portfolioData);
+    return portfolioData;
+}
 // Initialize pending data structure
 function getPendingData() {
     const stored = localStorage.getItem(PENDING_STORAGE_KEY);
@@ -3967,16 +3986,25 @@ function showSection(sectionId) {
         }, 100);
     }
     else if (sectionId === 'portfolio') {
-        console.log('📊 Portfolio section - Initializing...');
-        
-        setTimeout(() => {
-            if (typeof initializePortfolio === 'function') {
-                initializePortfolio();
-            } else {
-                // Fallback jika function belum dibuat
-                loadPortfolioData();
-            }
-        }, 100);
+         console.log('📊 Portfolio section - Initializing...');
+            
+            // Initialize portfolio data jika belum
+            initializePortfolioData();
+            
+            // Update UI dengan data yang ada
+            updatePortfolioUI();
+            
+            // Load fresh data dari server
+            setTimeout(async () => {
+                console.log('🚀 Starting portfolio data load from server...');
+                try {
+                    const result = await loadPortfolioData();
+                    console.log('✅ Portfolio data loaded:', result);
+                } catch (error) {
+                    console.error('❌ Error loading portfolio data:', error);
+                    showNotification('error', 'Gagal memuat data terbaru');
+                }
+            }, 300);
     }
 }
 // ⭐⭐ BARU: Setup Event Listeners untuk Position Trading ⭐⭐
@@ -6677,4 +6705,5 @@ function exportTransactionHistory() {
     // TODO: Implementasi
     alert('Fitur Export akan segera tersedia!');
 }
+
 
