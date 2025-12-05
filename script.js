@@ -210,6 +210,7 @@ function initializePortfolioData() {
         };
     }
      setupPortfolioModals();
+    setupTableActions();
     console.log('✅ Portfolio initialized. Current data:', portfolioData);
     return portfolioData;
 }
@@ -5117,7 +5118,7 @@ function updateTransactionTable() {
         const formattedBalance = `Rp ${formatNumber(transaction.balanceAfter || 0)}`;
         
         row.innerHTML = `
-            <td>
+                   <td>
                 <div>${formattedDate}</div>
                 <small style="color: #7f8c8d;">${formattedTime}</small>
             </td>
@@ -7176,6 +7177,251 @@ function exportTransactionHistory() {
     alert('Fitur Export akan segera tersedia!');
 }
 
+/* ===== EDIT TRANSACTION FUNCTION ===== */
 
+async function editTransaction(transactionId) {
+    console.log('✏️ editTransaction: Editing transaction ID:', transactionId);
+    
+    if (!transactionId) {
+        console.error('❌ Transaction ID is required');
+        showPortfolioNotification('error', 'Transaction ID tidak valid');
+        return;
+    }
+    
+    // Cari transaksi di data lokal
+    const transaction = portfolioData.transactions.find(t => t.id === transactionId);
+    
+    if (!transaction) {
+        console.error('❌ Transaction not found:', transactionId);
+        showPortfolioNotification('error', 'Transaksi tidak ditemukan');
+        return;
+    }
+    
+    console.log('📋 Found transaction:', transaction);
+    
+    // Untuk sekarang, kita hanya support edit notes dan method
+    // Karena edit amount/type bisa mengacaukan balance calculation
+    const newNotes = prompt('Edit catatan transaksi:', transaction.notes || '');
+    
+    if (newNotes === null) {
+        console.log('❌ Edit cancelled by user');
+        return; // User cancelled
+    }
+    
+    const newMethod = prompt('Edit metode transaksi (BANK_TRANSFER, E_WALLET, CASH):', transaction.method || 'BANK_TRANSFER');
+    
+    if (newMethod === null) {
+        console.log('❌ Edit cancelled by user');
+        return; // User cancelled
+    }
+    
+    // Validasi method
+    const validMethods = ['BANK_TRANSFER', 'E_WALLET', 'CASH'];
+    if (!validMethods.includes(newMethod.toUpperCase())) {
+        showPortfolioNotification('error', `Metode tidak valid. Pilihan: ${validMethods.join(', ')}`);
+        return;
+    }
+    
+    try {
+        console.log('🔄 Updating transaction...');
+        showPortfolioLoading('Mengupdate transaksi...');
+        
+        // Kirim update ke server
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'portfolio/update',
+                id: transactionId,
+                notes: newNotes,
+                method: newMethod.toUpperCase()
+            })
+        });
+        
+        const result = await response.json();
+        hidePortfolioLoading();
+        
+        if (result.success) {
+            console.log('✅ Transaction updated:', result);
+            showPortfolioNotification('success', 'Transaksi berhasil diupdate');
+            
+            // Refresh data
+            await loadPortfolioData();
+        } else {
+            throw new Error(result.error || 'Gagal mengupdate transaksi');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error updating transaction:', error);
+        hidePortfolioLoading();
+        showPortfolioNotification('error', error.message);
+    }
+}
+/* ===== DELETE TRANSACTION FUNCTION ===== */
+
+async function deleteTransaction(transactionId) {
+    console.log('🗑️ deleteTransaction: Deleting transaction ID:', transactionId);
+    
+    if (!transactionId) {
+        console.error('❌ Transaction ID is required');
+        showPortfolioNotification('error', 'Transaction ID tidak valid');
+        return;
+    }
+    
+    // Cari transaksi untuk konfirmasi
+    const transaction = portfolioData.transactions.find(t => t.id === transactionId);
+    
+    if (!transaction) {
+        console.error('❌ Transaction not found:', transactionId);
+        showPortfolioNotification('error', 'Transaksi tidak ditemukan');
+        return;
+    }
+    
+    // Konfirmasi delete
+    const isTopUp = transaction.type === 'TOP_UP';
+    const actionText = isTopUp ? 'TOP UP' : 'WITHDRAW';
+    const amountText = `Rp ${formatNumber(Math.abs(transaction.amount))}`;
+    const dateText = new Date(transaction.timestamp).toLocaleDateString('id-ID');
+    
+    const confirmation = confirm(
+        `HAPUS TRANSAKSI?\n\n` +
+        `Tanggal: ${dateText}\n` +
+        `Jenis: ${actionText}\n` +
+        `Jumlah: ${amountText}\n` +
+        `Metode: ${transaction.method || '-'}\n` +
+        `Catatan: ${transaction.notes || '-'}\n\n` +
+        `Transaksi akan dihapus permanen!`
+    );
+    
+    if (!confirmation) {
+        console.log('❌ Delete cancelled by user');
+        return;
+    }
+    
+    try {
+        console.log('🗑️ Deleting transaction...');
+        showPortfolioLoading('Menghapus transaksi...');
+        
+        // Kirim delete request ke server
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'portfolio/delete',
+                id: transactionId
+            })
+        });
+        
+        const result = await response.json();
+        hidePortfolioLoading();
+        
+        if (result.success) {
+            console.log('✅ Transaction deleted:', result);
+            showPortfolioNotification('success', 'Transaksi berhasil dihapus');
+            
+            // Refresh data
+            await loadPortfolioData();
+        } else {
+            throw new Error(result.error || 'Gagal menghapus transaksi');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error deleting transaction:', error);
+        hidePortfolioLoading();
+        showPortfolioNotification('error', error.message);
+    }
+}
+/* ===== EXPORT FUNCTIONS ===== */
+
+async function exportTransactionHistory() {
+    console.log('📤 exportTransactionHistory: Exporting data...');
+    
+    try {
+        if (!portfolioData.transactions || portfolioData.transactions.length === 0) {
+            showPortfolioNotification('warning', 'Tidak ada data transaksi untuk diexport');
+            return;
+        }
+        
+        showPortfolioLoading('Menyiapkan data export...');
+        
+        // Format data untuk CSV
+        const headers = ['Tanggal', 'Waktu', 'Jenis', 'Jumlah', 'Metode', 'Catatan', 'Saldo Setelah'];
+        
+        const csvData = portfolioData.transactions.map(trans => {
+            const date = new Date(trans.timestamp);
+            return [
+                date.toLocaleDateString('id-ID'),
+                date.toLocaleTimeString('id-ID'),
+                trans.type,
+                trans.type === 'TOP_UP' ? `+${trans.amount}` : `-${trans.amount}`,
+                trans.method || '',
+                trans.notes || '',
+                trans.balanceAfter || 0
+            ];
+        });
+        
+        // Tambah summary
+        csvData.unshift([]);
+        csvData.unshift(['TOTAL TOP UP', portfolioData.summary?.totalTopUp || 0]);
+        csvData.unshift(['TOTAL WITHDRAW', portfolioData.summary?.totalWithdraw || 0]);
+        csvData.unshift(['TOTAL EQUITY', portfolioData.summary?.totalEquity || 0]);
+        csvData.unshift(['AVAILABLE CASH', portfolioData.summary?.availableCash || 0]);
+        csvData.unshift(['=== SUMMARY ===']);
+        
+        // Convert ke CSV
+        const csvContent = [
+            headers.join(','),
+            ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        // Create download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `portfolio-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        hidePortfolioLoading();
+        console.log('✅ Export completed, file downloaded');
+        showPortfolioNotification('success', `Data ${portfolioData.transactions.length} transaksi berhasil diexport`);
+        
+    } catch (error) {
+        console.error('❌ Error exporting transaction history:', error);
+        hidePortfolioLoading();
+        showPortfolioNotification('error', 'Gagal mengexport data: ' + error.message);
+    }
+}
+/* ===== TABLE ACTION BUTTONS SETUP ===== */
+
+function setupTableActions() {
+    console.log('🔄 setupTableActions: Initializing...');
+    
+    // Export button
+    const exportBtn = document.getElementById('exportTransactions');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportTransactionHistory);
+        console.log('✅ Export button setup');
+    }
+    
+    // Filter button (placeholder untuk sekarang)
+    const filterBtn = document.getElementById('filterTransactions');
+    if (filterBtn) {
+        filterBtn.addEventListener('click', () => {
+            console.log('🔍 Filter button clicked - Feature coming soon!');
+            showPortfolioNotification('info', 'Fitur filter akan segera tersedia!');
+        });
+        console.log('✅ Filter button setup');
+    }
+    
+    console.log('✅ setupTableActions: Completed');
+}
 
 
