@@ -6321,7 +6321,7 @@ function setupPortfolioModals() {
     // 2. Withdraw Modal
     const withdrawBtn = document.getElementById('addWithdrawBtn');
     const withdrawModal = document.getElementById('withdrawModal');
-    const updateWithdrawInfo = setupWithdrawForm(); // Setup form dan dapatkan update function
+    //const updateWithdrawInfo = setupWithdrawForm(); // Setup form dan dapatkan update function
     
     if (withdrawBtn && withdrawModal) {
        withdrawBtn.addEventListener('click', () => {
@@ -7651,6 +7651,7 @@ function runPortfolioGETTest() {
         }
     });
 }
+
 
 
 
