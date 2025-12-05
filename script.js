@@ -188,6 +188,10 @@ function updateLoadingStatus(status) {
 }
 
 let tradingData = [];
+let portfolioData = {
+    summary: null,
+    transactions: []
+};
 const PENDING_STORAGE_KEY = 'trading_pending_data';
 
 // Initialize pending data structure
@@ -4709,7 +4713,411 @@ async function saveData() {
         return false;
     }
 }
+// 1. Fetch Portfolio Summary from Apps Script
+async function fetchPortfolioSummary() {
+    console.log('📊 fetchPortfolioSummary: Fetching summary data...');
+    
+    try {
+        const url = `${APPS_SCRIPT_URL}?action=portfolio/summary&t=${Date.now()}`;
+        console.log('📊 Fetching from:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 fetchPortfolioSummary: Response received:', data);
+        
+        return data;
+    } catch (error) {
+        console.error('❌ fetchPortfolioSummary: Error fetching:', error);
+        return { 
+            success: false, 
+            error: error.toString(),
+            message: 'Gagal mengambil data summary portfolio'
+        };
+    }
+}
 
+// 2. Fetch Portfolio Transactions
+async function fetchPortfolioTransactions() {
+    console.log('📋 fetchPortfolioTransactions: Fetching transaction data...');
+    
+    try {
+        const url = `${APPS_SCRIPT_URL}?action=portfolio/transactions&t=${Date.now()}`;
+        console.log('📋 Fetching from:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📋 fetchPortfolioTransactions: Response received, count:', data.transactions?.length || 0);
+        
+        return data;
+    } catch (error) {
+        console.error('❌ fetchPortfolioTransactions: Error fetching:', error);
+        return { 
+            success: false, 
+            error: error.toString(),
+            message: 'Gagal mengambil data transaksi'
+        };
+    }
+}
+// 3. Load Portfolio Data (Summary + Transactions)
+async function loadPortfolioData() {
+    console.log('🚀 loadPortfolioData: Starting to load portfolio data...');
+    
+    // Show loading state
+    const portfolioSection = document.getElementById('portfolio');
+    if (portfolioSection && portfolioSection.classList.contains('active')) {
+        console.log('📱 Portfolio section is active, showing loading...');
+        
+        // Add loading class to table
+        const tableBody = document.getElementById('transactionTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr class="loading-row">
+                    <td colspan="7" style="text-align: center;">
+                        <div class="loading-spinner-small"></div>
+                        Loading portfolio data...
+                    </td>
+                </tr>
+            `;
+        }
+    }
+    
+    try {
+        console.log('🔄 Loading summary and transactions in parallel...');
+        
+        // Load both in parallel
+        const [summaryResult, transactionsResult] = await Promise.all([
+            fetchPortfolioSummary(),
+            fetchPortfolioTransactions()
+        ]);
+        
+        console.log('✅ Parallel loading completed');
+        console.log('Summary success:', summaryResult.success);
+        console.log('Transactions success:', transactionsResult.success);
+        
+        // Process summary
+        if (summaryResult.success) {
+            portfolioData.summary = summaryResult.summary;
+            console.log('📈 Summary data loaded:', portfolioData.summary);
+            
+            // Update UI if portfolio section is active
+            if (document.getElementById('portfolio')?.classList.contains('active')) {
+                updatePortfolioUI();
+            }
+        } else {
+            console.error('❌ Failed to load summary:', summaryResult.error);
+            showNotification('error', 'Gagal memuat summary portfolio: ' + (summaryResult.error || 'Unknown error'));
+        }
+        
+        // Process transactions
+        if (transactionsResult.success) {
+            portfolioData.transactions = transactionsResult.transactions || [];
+            console.log('📋 Transactions loaded:', portfolioData.transactions.length, 'records');
+            
+            // Update UI if portfolio section is active
+            if (document.getElementById('portfolio')?.classList.contains('active')) {
+                updateTransactionTable();
+            }
+        } else {
+            console.error('❌ Failed to load transactions:', transactionsResult.error);
+            showNotification('error', 'Gagal memuat riwayat transaksi');
+        }
+        
+        // Update withdraw form data
+        updateWithdrawFormData();
+        
+        console.log('🎉 loadPortfolioData: Completed successfully');
+        return {
+            success: true,
+            summaryLoaded: summaryResult.success,
+            transactionsLoaded: transactionsResult.success,
+            summary: portfolioData.summary,
+            transactionCount: portfolioData.transactions.length
+        };
+        
+    } catch (error) {
+        console.error('💥 loadPortfolioData: Error loading portfolio data:', error);
+        showNotification('error', 'Gagal memuat data portfolio: ' + error.message);
+        return { 
+            success: false, 
+            error: error.toString(),
+            message: 'Gagal memuat data portfolio'
+        };
+    }
+}
+/* ===== PORTFOLIO UI FUNCTIONS ===== */
+
+// 1. Update Portfolio UI (Summary Cards)
+function updatePortfolioUI() {
+    console.log('🎨 updatePortfolioUI: Updating portfolio UI...');
+    
+    if (!portfolioData.summary) {
+        console.warn('⚠️ updatePortfolioUI: No summary data available');
+        return;
+    }
+    
+    const summary = portfolioData.summary;
+    console.log('📊 updatePortfolioUI: Using summary:', summary);
+    
+    try {
+        // Helper formatting functions
+        const formatRp = (num) => {
+            if (num === undefined || num === null) return 'Rp 0';
+            return 'Rp ' + new Intl.NumberFormat('id-ID').format(num);
+        };
+        
+        const formatPercent = (num) => {
+            if (num === undefined || num === null) return '0%';
+            return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
+        };
+        
+        // Update summary cards
+        const elementsToUpdate = [
+            { id: 'totalTopUp', value: formatRp(summary.totalTopUp) },
+            { id: 'totalWithdraw', value: formatRp(summary.totalWithdraw) },
+            { id: 'totalEquity', value: formatRp(summary.totalEquity) },
+            { id: 'totalCash', value: formatRp(summary.availableCash) },
+            { id: 'growthValue', value: formatPercent(summary.growthPercent) }
+        ];
+        
+        elementsToUpdate.forEach(item => {
+            const element = document.getElementById(item.id);
+            if (element) {
+                element.textContent = item.value;
+                console.log(`✅ Updated ${item.id}: ${item.value}`);
+            } else {
+                console.warn(`⚠️ Element not found: ${item.id}`);
+            }
+        });
+        
+        // Update breakdown section
+        const breakdownElements = [
+            { id: 'initialCapital', value: formatRp(summary.totalTopUp) },
+            { id: 'totalTradingPL', value: `${summary.totalPL >= 0 ? '+' : ''}${formatRp(summary.totalPL)}` },
+            { id: 'netCashFlow', value: formatRp(summary.totalTopUp - summary.totalWithdraw) },
+            { id: 'calculatedEquity', value: formatRp(summary.totalEquity) }
+        ];
+        
+        breakdownElements.forEach(item => {
+            const element = document.getElementById(item.id);
+            if (element) {
+                element.textContent = item.value;
+                console.log(`✅ Updated breakdown ${item.id}: ${item.value}`);
+            }
+        });
+        
+        // Update growth trend indicators
+        updateTrendIndicators();
+        
+        // Update timestamp if exists
+        const lastUpdatedEl = document.getElementById('lastUpdated');
+        if (lastUpdatedEl && summary.lastUpdated) {
+            try {
+                const date = new Date(summary.lastUpdated);
+                const formattedDate = date.toLocaleDateString('id-ID', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                lastUpdatedEl.textContent = `Update: ${formattedDate}`;
+                console.log(`✅ Updated lastUpdated: ${formattedDate}`);
+            } catch (dateError) {
+                console.warn('⚠️ Could not format date:', dateError);
+            }
+        }
+        
+        console.log('✅ updatePortfolioUI: UI updated successfully');
+        
+    } catch (error) {
+        console.error('❌ updatePortfolioUI: Error updating UI:', error);
+    }
+}
+
+// 2. Update Transaction History Table
+function updateTransactionTable() {
+    console.log('📋 updateTransactionTable: Updating transaction table...');
+    
+    const tbody = document.getElementById('transactionTableBody');
+    if (!tbody) {
+        console.error('❌ updateTransactionTable: Table body not found');
+        return;
+    }
+    
+    if (!portfolioData.transactions || portfolioData.transactions.length === 0) {
+        console.log('📭 No transactions to display');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px; color: #7f8c8d;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
+                    <div>Belum ada transaksi dana</div>
+                    <div style="font-size: 12px; margin-top: 10px;">Mulai dengan Top Up pertama Anda</div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    console.log(`📋 Displaying ${portfolioData.transactions.length} transactions`);
+    
+    // Sort by timestamp (newest first)
+    const sortedTransactions = [...portfolioData.transactions].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    // Clear table
+    tbody.innerHTML = '';
+    
+    // Add rows
+    sortedTransactions.forEach((transaction, index) => {
+        const row = document.createElement('tr');
+        const isTopUp = transaction.type === 'TOP_UP';
+        
+        // Format date
+        let formattedDate = '-';
+        let formattedTime = '';
+        try {
+            const date = new Date(transaction.timestamp);
+            formattedDate = date.toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            formattedTime = date.toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (e) {
+            console.warn(`⚠️ Could not format date for transaction ${index}:`, e);
+        }
+        
+        // Format amount
+        const amountClass = isTopUp ? 'positive' : 'negative';
+        const amountSign = isTopUp ? '+' : '-';
+        const formattedAmount = `${amountSign}Rp ${formatNumber(Math.abs(transaction.amount))}`;
+        
+        // Format balance
+        const formattedBalance = `Rp ${formatNumber(transaction.balanceAfter || 0)}`;
+        
+        row.innerHTML = `
+            <td>
+                <div>${formattedDate}</div>
+                <small style="color: #7f8c8d;">${formattedTime}</small>
+            </td>
+            <td>
+                <span class="transaction-badge ${isTopUp ? 'topup-badge' : 'withdraw-badge'}">
+                    ${isTopUp ? 'TOP UP' : 'WITHDRAW'}
+                </span>
+            </td>
+            <td class="${amountClass}" style="font-weight: 600;">${formattedAmount}</td>
+            <td>${transaction.method || '-'}</td>
+            <td title="${transaction.notes || ''}">${transaction.notes ? truncateText(transaction.notes, 30) : '-'}</td>
+            <td style="font-weight: 500;">${formattedBalance}</td>
+            <td>
+                <button class="action-btn edit-btn" onclick="editTransaction('${transaction.id}')" title="Edit">✏️</button>
+                <button class="action-btn delete-btn" onclick="deleteTransaction('${transaction.id}')" title="Hapus">🗑️</button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    console.log('✅ updateTransactionTable: Table updated successfully');
+}
+
+// 3. Helper Functions
+function formatNumber(num) {
+    if (num === undefined || num === null || isNaN(num)) return '0';
+    return new Intl.NumberFormat('id-ID').format(Math.round(num));
+}
+
+function truncateText(text, maxLength) {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+}
+
+// 4. Update Trend Indicators
+function updateTrendIndicators() {
+    console.log('📈 updateTrendIndicators: Updating trend indicators...');
+    
+    if (!portfolioData.summary) {
+        console.warn('⚠️ No summary data for trend indicators');
+        return;
+    }
+    
+    const growth = portfolioData.summary.growthPercent || 0;
+    
+    // Update growth trend element if exists
+    const growthElement = document.getElementById('growthChange');
+    if (growthElement) {
+        if (growth >= 0) {
+            growthElement.innerHTML = `<span class="trend-up">↗ +${growth.toFixed(2)}%</span> all time`;
+            console.log(`✅ Growth trend: Positive (+${growth.toFixed(2)}%)`);
+        } else {
+            growthElement.innerHTML = `<span class="trend-down">↘ ${growth.toFixed(2)}%</span> all time`;
+            console.log(`⚠️ Growth trend: Negative (${growth.toFixed(2)}%)`);
+        }
+    }
+    
+    // Update other trend indicators if they exist
+    const trendElements = {
+        plTrend: portfolioData.summary.totalPL || 0,
+        winRateTrend: 0, // You can calculate this from trading data
+        tradesTrend: 0   // You can calculate this from trading data
+    };
+    
+    Object.keys(trendElements).forEach(elementId => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            const value = trendElements[elementId];
+            if (value > 0) {
+                element.innerHTML = `<span class="trend-up">↗ +${formatNumber(value)}</span>`;
+            } else if (value < 0) {
+                element.innerHTML = `<span class="trend-down">↘ ${formatNumber(value)}</span>`;
+            } else {
+                element.innerHTML = `<span class="trend-neutral">→ 0</span>`;
+            }
+        }
+    });
+}
+
+// 5. Update Withdraw Form Data
+function updateWithdrawFormData() {
+    console.log('💰 updateWithdrawFormData: Updating withdraw form...');
+    
+    if (!portfolioData.summary) {
+        console.warn('⚠️ No summary data for withdraw form');
+        return;
+    }
+    
+    const availableCash = portfolioData.summary.availableCash || 0;
+    console.log(`💰 Available cash: Rp ${formatNumber(availableCash)}`);
+    
+    // Update modal info
+    const availableCashEl = document.getElementById('availableCash');
+    const maxWithdrawEl = document.getElementById('maxWithdraw');
+    
+    if (availableCashEl) {
+        availableCashEl.textContent = `Rp ${formatNumber(availableCash)}`;
+        console.log('✅ Updated availableCash display');
+    }
+    
+    if (maxWithdrawEl) {
+        maxWithdrawEl.textContent = `Rp ${formatNumber(availableCash)}`;
+        console.log('✅ Updated maxWithdraw display');
+    }
+}
 // Fungsi untuk generate ID unik
 function generateId() {
     return 'TRX-' + Date.now();
@@ -6269,3 +6677,4 @@ function exportTransactionHistory() {
     // TODO: Implementasi
     alert('Fitur Export akan segera tersedia!');
 }
+
