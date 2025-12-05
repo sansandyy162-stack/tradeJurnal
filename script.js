@@ -3874,6 +3874,7 @@ function setupEventListeners() {
     document.getElementById('addBtn').addEventListener('click', () => showSection('add-data'));
     document.getElementById('reportBtn').addEventListener('click', () => showSection('report'));
     document.getElementById('performanceBtn').addEventListener('click', () => showSection('performance'));
+    document.getElementById('portfolioBtn').addEventListener('click', () => showSection('portfolio'));
     
     // Form submission
     document.getElementById('tradingForm').addEventListener('submit', handleFormSubmit);
@@ -3959,6 +3960,18 @@ function showSection(sectionId) {
             displaySahamPerformance();
             displayMetodePerformance();
             displayTradingSummary();
+        }, 100);
+    }
+    else if (sectionId === 'portfolio') {
+        console.log('📊 Portfolio section - Initializing...');
+        
+        setTimeout(() => {
+            if (typeof initializePortfolio === 'function') {
+                initializePortfolio();
+            } else {
+                // Fallback jika function belum dibuat
+                loadPortfolioData();
+            }
         }, 100);
     }
 }
@@ -5983,3 +5996,276 @@ function addDebugRefreshButton() {
 
 // Panggil fungsi ini di initializeApp()
 // Tambahkan di dalam initializeApp(), setelah setupAutoSync()
+/* ===== PORTFOLIO FUNCTIONS ===== */
+
+function initializePortfolio() {
+    console.log('Initializing portfolio module...');
+    
+    // Setup modal event listeners
+    setupPortfolioModals();
+    
+    // Load initial data
+    loadPortfolioData();
+    
+    // Load transaction history
+    loadTransactionHistory();
+}
+
+function setupPortfolioModals() {
+    // Top Up Modal
+    const topUpBtn = document.getElementById('addTopUpBtn');
+    const topUpModal = document.getElementById('topUpModal');
+    const cancelTopUp = document.getElementById('cancelTopUp');
+    
+    if (topUpBtn && topUpModal) {
+        topUpBtn.addEventListener('click', () => {
+            // Update form sebelum show
+            updateTopUpForm();
+            topUpModal.style.display = 'block';
+        });
+        
+        // Close dengan X button
+        const topUpClose = topUpModal.querySelector('.close');
+        if (topUpClose) {
+            topUpClose.addEventListener('click', () => {
+                topUpModal.style.display = 'none';
+            });
+        }
+        
+        // Close dengan Cancel button
+        if (cancelTopUp) {
+            cancelTopUp.addEventListener('click', () => {
+                topUpModal.style.display = 'none';
+            });
+        }
+        
+        // Quick amount buttons
+        document.querySelectorAll('.quick-amount').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const amount = this.getAttribute('data-amount');
+                document.getElementById('topUpAmount').value = amount;
+                
+                // Highlight active button
+                document.querySelectorAll('.quick-amount').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    }
+    
+    // Withdraw Modal (pattern sama)
+    const withdrawBtn = document.getElementById('addWithdrawBtn');
+    const withdrawModal = document.getElementById('withdrawModal');
+    const cancelWithdraw = document.getElementById('cancelWithdraw');
+    
+    if (withdrawBtn && withdrawModal) {
+        withdrawBtn.addEventListener('click', () => {
+            // Update available cash info
+            updateWithdrawForm();
+            withdrawModal.style.display = 'block';
+        });
+        
+        // Close handlers
+        const withdrawClose = withdrawModal.querySelector('.close');
+        if (withdrawClose) {
+            withdrawClose.addEventListener('click', () => {
+                withdrawModal.style.display = 'none';
+            });
+        }
+        
+        if (cancelWithdraw) {
+            cancelWithdraw.addEventListener('click', () => {
+                withdrawModal.style.display = 'none';
+            });
+        }
+        
+        // Quick percentage buttons
+        document.querySelectorAll('.quick-percent').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const percent = parseInt(this.getAttribute('data-percent'));
+                const availableCash = parseFloat(document.getElementById('availableCash').textContent.replace(/[^0-9.-]+/g, ""));
+                const amount = Math.floor((availableCash * percent) / 100);
+                
+                document.getElementById('withdrawAmount').value = amount;
+                
+                // Highlight active button
+                document.querySelectorAll('.quick-percent').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    }
+    
+    // Form submissions
+    const topUpForm = document.getElementById('topUpForm');
+    if (topUpForm) {
+        topUpForm.addEventListener('submit', handleTopUpSubmit);
+    }
+    
+    const withdrawForm = document.getElementById('withdrawForm');
+    if (withdrawForm) {
+        withdrawForm.addEventListener('submit', handleWithdrawSubmit);
+    }
+    
+    // Export buttons
+    const exportTransactionsBtn = document.getElementById('exportTransactions');
+    if (exportTransactionsBtn) {
+        exportTransactionsBtn.addEventListener('click', exportTransactionHistory);
+    }
+}
+
+function loadPortfolioData() {
+    console.log('Loading portfolio data...');
+    
+    // Untuk sekarang, gunakan placeholder data
+    const sampleData = {
+        totalTopUp: 50000000,
+        totalWithdraw: 10000000,
+        totalEquity: 65000000,
+        totalCash: 55000000,
+        growth: 25,
+        initialCapital: 40000000,
+        tradingPL: 7000000,
+        netCashFlow: 8000000
+    };
+    
+    updatePortfolioUI(sampleData);
+}
+
+function updatePortfolioUI(data) {
+    // Helper function untuk format Rupiah
+    const formatRp = (num) => {
+        return 'Rp ' + num.toLocaleString('id-ID');
+    };
+    
+    // Update metrics cards
+    document.getElementById('totalTopUp').textContent = formatRp(data.totalTopUp);
+    document.getElementById('totalWithdraw').textContent = formatRp(data.totalWithdraw);
+    document.getElementById('totalEquity').textContent = formatRp(data.totalEquity);
+    document.getElementById('totalCash').textContent = formatRp(data.totalCash);
+    document.getElementById('growthValue').textContent = `+${data.growth}%`;
+    
+    // Update breakdown
+    document.getElementById('initialCapital').textContent = formatRp(data.initialCapital);
+    document.getElementById('totalTradingPL').textContent = `+${formatRp(data.tradingPL)}`;
+    document.getElementById('netCashFlow').textContent = formatRp(data.netCashFlow);
+    document.getElementById('calculatedEquity').textContent = formatRp(data.totalEquity);
+}
+
+function loadTransactionHistory() {
+    console.log('Loading transaction history...');
+    
+    // Sample data untuk sementara
+    const sampleTransactions = [
+        { date: '2024-12-05', type: 'TOP UP', amount: 5000000, method: 'Transfer Bank', notes: 'Tambah modal', balance: 55000000 },
+        { date: '2024-12-03', type: 'WITHDRAW', amount: -2000000, method: 'Transfer Bank', notes: 'Dana darurat', balance: 50000000 },
+        { date: '2024-12-01', type: 'TOP UP', amount: 5000000, method: 'E-Wallet', notes: 'Tambahan modal', balance: 52000000 }
+    ];
+    
+    updateTransactionTable(sampleTransactions);
+}
+
+function updateTransactionTable(transactions) {
+    const tbody = document.getElementById('transactionTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (transactions.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; color: #7f8c8d;">
+                    Belum ada transaksi dana
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    transactions.forEach(transaction => {
+        const row = document.createElement('tr');
+        
+        const isTopUp = transaction.type === 'TOP UP';
+        const amountClass = isTopUp ? 'positive' : 'negative';
+        const amountSign = isTopUp ? '+' : '';
+        
+        row.innerHTML = `
+            <td>${formatDate(transaction.date)}</td>
+            <td><span class="transaction-type ${transaction.type.toLowerCase().replace(' ', '-')}">${transaction.type}</span></td>
+            <td class="${amountClass}">${amountSign}${formatRupiah(Math.abs(transaction.amount))}</td>
+            <td>${transaction.method}</td>
+            <td>${transaction.notes || '-'}</td>
+            <td>${formatRupiah(transaction.balance)}</td>
+            <td>
+                <button class="action-btn edit-btn" title="Edit">✏️</button>
+                <button class="action-btn delete-btn" title="Hapus">🗑️</button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function updateTopUpForm() {
+    // Reset form
+    document.getElementById('topUpAmount').value = '';
+    document.getElementById('topUpMethod').selectedIndex = 0;
+    document.getElementById('topUpNotes').value = '';
+    
+    // Reset quick buttons
+    document.querySelectorAll('.quick-amount').forEach(btn => {
+        btn.classList.remove('active');
+    });
+}
+
+function updateWithdrawForm() {
+    const cash = 55000000; // Placeholder, nanti ambil dari data
+    
+    document.getElementById('availableCash').textContent = formatRupiah(cash);
+    document.getElementById('maxWithdraw').textContent = formatRupiah(cash);
+    document.getElementById('withdrawAmount').value = '';
+    document.getElementById('withdrawMethod').selectedIndex = 0;
+    document.getElementById('withdrawNotes').value = '';
+    
+    // Reset quick buttons
+    document.querySelectorAll('.quick-percent').forEach(btn => {
+        btn.classList.remove('active');
+    });
+}
+
+// Helper functions (gunakan yang sudah ada jika ada)
+function formatRupiah(amount) {
+    // Cek apakah sudah ada function formatRupiah di kode Anda
+    // Jika sudah, hapus yang ini dan gunakan yang existing
+    return 'Rp ' + amount.toLocaleString('id-ID');
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+// Placeholder untuk form handlers
+function handleTopUpSubmit(e) {
+    e.preventDefault();
+    console.log('Top Up submitted');
+    // TODO: Implementasi
+    alert('Fitur Top Up akan segera tersedia!');
+    document.getElementById('topUpModal').style.display = 'none';
+}
+
+function handleWithdrawSubmit(e) {
+    e.preventDefault();
+    console.log('Withdraw submitted');
+    // TODO: Implementasi
+    alert('Fitur Withdraw akan segera tersedia!');
+    document.getElementById('withdrawModal').style.display = 'none';
+}
+
+function exportTransactionHistory() {
+    console.log('Exporting transaction history...');
+    // TODO: Implementasi
+    alert('Fitur Export akan segera tersedia!');
+}
