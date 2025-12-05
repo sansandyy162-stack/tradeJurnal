@@ -6134,6 +6134,56 @@ function setupWithdrawForm() {
     console.log('✅ setupWithdrawForm: Completed');
     return updateWithdrawInfo; // Return function untuk update nanti
 }
+// Test function untuk verify frontend-backend integration
+async function testPortfolioIntegration() {
+    console.log('🧪 testPortfolioIntegration: Testing full integration...');
+    
+    try {
+        // Test 1: Create transaction
+        console.log('1. Creating test transaction...');
+        const testResult = await addPortfolioTransaction({
+            type: 'TOP_UP',
+            amount: 25000,
+            method: 'TEST_INTEGRATION',
+            notes: 'Integration test from frontend'
+        });
+        
+        console.log('Transaction result:', testResult);
+        
+        if (!testResult.success) {
+            throw new Error('Transaction failed: ' + testResult.error);
+        }
+        
+        // Test 2: Verify data loaded
+        console.log('2. Waiting for data refresh...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Test 3: Load and verify
+        console.log('3. Loading portfolio data...');
+        const loadResult = await loadPortfolioData();
+        console.log('Load result:', loadResult);
+        
+        // Test 4: Check UI
+        console.log('4. Verifying UI...');
+        updatePortfolioUI();
+        updateTransactionTable();
+        
+        return {
+            success: true,
+            transaction: testResult,
+            load: loadResult,
+            transactionCount: portfolioData.transactions?.length || 0,
+            message: 'Integration test completed'
+        };
+        
+    } catch (error) {
+        console.error('❌ Integration test failed:', error);
+        return {
+            success: false,
+            error: error.toString()
+        };
+    }
+}
 /* ===== MODAL CONTROLS ===== */
 
 function setupPortfolioModals() {
@@ -7502,6 +7552,7 @@ function runPortfolioGETTest() {
         }
     });
 }
+
 
 
 
