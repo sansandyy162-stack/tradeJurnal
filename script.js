@@ -6566,26 +6566,122 @@ function loadPortfolioData() {
     updatePortfolioUI(sampleData);
 }
 
-function updatePortfolioUI(data) {
-    // Helper function untuk format Rupiah
-    const formatRp = (num) => {
-        return 'Rp ' + num.toLocaleString('id-ID');
+function updatePortfolioUI() {
+    console.log('🎨 updatePortfolioUI: Starting UI update...');
+    
+    // DEBUG: Log state before anything
+    console.log('🔍 DEBUG - portfolioData:', portfolioData);
+    console.log('🔍 DEBUG - portfolioData.summary:', portfolioData?.summary);
+    
+    // SAFETY CHECK: Jika portfolioData tidak ada
+    if (!portfolioData) {
+        console.error('❌ CRITICAL: portfolioData is undefined!');
+        portfolioData = {
+            summary: {
+                totalTopUp: 0,
+                totalWithdraw: 0,
+                totalPL: 0,
+                totalEquity: 0,
+                availableCash: 0,
+                growthPercent: 0,
+                lastUpdated: new Date().toISOString()
+            },
+            transactions: []
+        };
+        console.log('🆕 Created new portfolioData:', portfolioData);
+    }
+    
+    // SAFETY CHECK: Jika summary tidak ada
+    if (!portfolioData.summary) {
+        console.warn('⚠️ portfolioData.summary is null/undefined. Setting defaults...');
+        portfolioData.summary = {
+            totalTopUp: 0,
+            totalWithdraw: 0,
+            totalPL: 0,
+            totalEquity: 0,
+            availableCash: 0,
+            growthPercent: 0,
+            lastUpdated: new Date().toISOString()
+        };
+    }
+    
+    // Pastikan semua property ada
+    const safeSummary = {
+        totalTopUp: portfolioData.summary.totalTopUp || 0,
+        totalWithdraw: portfolioData.summary.totalWithdraw || 0,
+        totalPL: portfolioData.summary.totalPL || 0,
+        totalEquity: portfolioData.summary.totalEquity || 0,
+        availableCash: portfolioData.summary.availableCash || 0,
+        growthPercent: portfolioData.summary.growthPercent || 0,
+        lastUpdated: portfolioData.summary.lastUpdated || new Date().toISOString()
     };
     
-    // Update metrics cards
-    document.getElementById('totalTopUp').textContent = formatRp(data.totalTopUp);
-    document.getElementById('totalWithdraw').textContent = formatRp(data.totalWithdraw);
-    document.getElementById('totalEquity').textContent = formatRp(data.totalEquity);
-    document.getElementById('totalCash').textContent = formatRp(data.totalCash);
-    document.getElementById('growthValue').textContent = `+${data.growth}%`;
+    console.log('📊 Using safeSummary:', safeSummary);
     
-    // Update breakdown
-    document.getElementById('initialCapital').textContent = formatRp(data.initialCapital);
-    document.getElementById('totalTradingPL').textContent = `+${formatRp(data.tradingPL)}`;
-    document.getElementById('netCashFlow').textContent = formatRp(data.netCashFlow);
-    document.getElementById('calculatedEquity').textContent = formatRp(data.totalEquity);
+    try {
+        // Helper formatting functions
+        const formatRp = (num) => {
+            const value = Number(num) || 0;
+            return 'Rp ' + new Intl.NumberFormat('id-ID').format(value);
+        };
+        
+        const formatPercent = (num) => {
+            const value = Number(num) || 0;
+            return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+        };
+        
+        console.log('🔄 Starting to update UI elements...');
+        
+        // Update summary cards dengan TRY-CATCH per element
+        const elementsToUpdate = [
+            { id: 'totalTopUp', value: formatRp(safeSummary.totalTopUp) },
+            { id: 'totalWithdraw', value: formatRp(safeSummary.totalWithdraw) },
+            { id: 'totalEquity', value: formatRp(safeSummary.totalEquity) },
+            { id: 'totalCash', value: formatRp(safeSummary.availableCash) },
+            { id: 'growthValue', value: formatPercent(safeSummary.growthPercent) }
+        ];
+        
+        elementsToUpdate.forEach(item => {
+            try {
+                const element = document.getElementById(item.id);
+                if (element) {
+                    element.textContent = item.value;
+                    console.log(`✅ Updated ${item.id}: ${item.value}`);
+                } else {
+                    console.warn(`⚠️ Element not found: ${item.id}`);
+                }
+            } catch (elementError) {
+                console.error(`❌ Error updating ${item.id}:`, elementError);
+            }
+        });
+        
+        // Update breakdown section
+        const breakdownElements = [
+            { id: 'initialCapital', value: formatRp(safeSummary.totalTopUp) },
+            { id: 'totalTradingPL', value: `${safeSummary.totalPL >= 0 ? '+' : ''}${formatRp(safeSummary.totalPL)}` },
+            { id: 'netCashFlow', value: formatRp(safeSummary.totalTopUp - safeSummary.totalWithdraw) },
+            { id: 'calculatedEquity', value: formatRp(safeSummary.totalEquity) }
+        ];
+        
+        breakdownElements.forEach(item => {
+            try {
+                const element = document.getElementById(item.id);
+                if (element) {
+                    element.textContent = item.value;
+                    console.log(`✅ Updated breakdown ${item.id}: ${item.value}`);
+                }
+            } catch (error) {
+                console.error(`❌ Error updating breakdown ${item.id}:`, error);
+            }
+        });
+        
+        console.log('✅ updatePortfolioUI: UI updated successfully');
+        
+    } catch (error) {
+        console.error('💥 updatePortfolioUI: Critical error:', error);
+        console.error('Error stack:', error.stack);
+    }
 }
-
 function loadTransactionHistory() {
     console.log('Loading transaction history...');
     
@@ -6705,5 +6801,6 @@ function exportTransactionHistory() {
     // TODO: Implementasi
     alert('Fitur Export akan segera tersedia!');
 }
+
 
 
