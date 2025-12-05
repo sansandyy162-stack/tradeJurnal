@@ -6264,7 +6264,7 @@ function setupPortfolioModals() {
     setupTopUpForm();
     
     // Setup withdraw form dan dapatkan update function
-    let updateWithdrawInfo = () => {};
+    //let updateWithdrawInfo = () => {};
     try {
         updateWithdrawInfo = setupWithdrawForm() || (() => {});
     } catch (error) {
@@ -7651,6 +7651,7 @@ function runPortfolioGETTest() {
         }
     });
 }
+
 
 
 
