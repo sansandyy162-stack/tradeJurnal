@@ -12,7 +12,8 @@
         <header>
             <h1>Jurnal Trading Saham Indonesia</h1>
             <nav>
-                <button id="homeBtn" class="nav-btn active">Home</button>                
+                <button id="homeBtn" class="nav-btn active">Home</button>
+                <button id="portfolioBtn" class="nav-btn">Portofolio</button>
                 <button id="reportBtn" class="nav-btn">Laporan</button>
                 <button id="performanceBtn" class="nav-btn">Performance</button>
                 <button id="addBtn" class="nav-btn">Tambah Data</button>
@@ -567,6 +568,164 @@
                     </div>
                 </div>
             </section>
+                        <!-- Portfolio Section -->
+            <section id="portfolio" class="section">
+                <h2>📊 Portofolio Trading</h2>
+                
+                <!-- Portfolio Metrics -->
+                <div class="portfolio-metrics">
+                    <div class="portfolio-card">
+                        <div class="portfolio-icon">💰</div>
+                        <div class="portfolio-content">
+                            <div class="portfolio-label">TOTAL TOP UP</div>
+                            <div class="portfolio-value" id="totalTopUp">Rp 0</div>
+                            <div class="portfolio-change" id="topUpChange">+0% bulan ini</div>
+                        </div>
+                    </div>
+                    
+                    <div class="portfolio-card">
+                        <div class="portfolio-icon">💸</div>
+                        <div class="portfolio-content">
+                            <div class="portfolio-label">TOTAL WITHDRAW</div>
+                            <div class="portfolio-value" id="totalWithdraw">Rp 0</div>
+                            <div class="portfolio-change" id="withdrawChange">+0% bulan ini</div>
+                        </div>
+                    </div>
+                    
+                    <div class="portfolio-card">
+                        <div class="portfolio-icon">📈</div>
+                        <div class="portfolio-content">
+                            <div class="portfolio-label">TOTAL EQUITY</div>
+                            <div class="portfolio-value" id="totalEquity">Rp 0</div>
+                            <div class="portfolio-change" id="equityChange">
+                                <span class="trend-up">+0%</span> all time
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="portfolio-card">
+                        <div class="portfolio-icon">💵</div>
+                        <div class="portfolio-content">
+                            <div class="portfolio-label">TOTAL CASH</div>
+                            <div class="portfolio-value" id="totalCash">Rp 0</div>
+                            <div class="portfolio-change" id="cashChange">
+                                <span class="trend-neutral">0%</span> dari equity
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="portfolio-card highlight">
+                        <div class="portfolio-icon">🚀</div>
+                        <div class="portfolio-content">
+                            <div class="portfolio-label">GROWTH</div>
+                            <div class="portfolio-value" id="growthValue">0%</div>
+                            <div class="portfolio-change" id="growthChange">
+                                <span class="trend-up">+0%</span> vs modal awal
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Portfolio Breakdown -->
+                <div class="portfolio-breakdown">
+                    <div class="breakdown-card">
+                        <h3>📊 Breakdown Portofolio</h3>
+                        <div class="breakdown-content">
+                            <div class="breakdown-item">
+                                <span class="breakdown-label">Modal Awal</span>
+                                <span class="breakdown-value" id="initialCapital">Rp 0</span>
+                            </div>
+                            <div class="breakdown-item">
+                                <span class="breakdown-label">Total P/L Trading</span>
+                                <span class="breakdown-value positive" id="totalTradingPL">+Rp 0</span>
+                            </div>
+                            <div class="breakdown-item">
+                                <span class="breakdown-label">Net Cash Flow</span>
+                                <span class="breakdown-value" id="netCashFlow">Rp 0</span>
+                            </div>
+                            <div class="breakdown-item total">
+                                <span class="breakdown-label">Total Equity</span>
+                                <span class="breakdown-value" id="calculatedEquity">Rp 0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="breakdown-card">
+                        <h3>📈 Growth Chart</h3>
+                        <div class="chart-container-small">
+                            <canvas id="growthChart"></canvas>
+                        </div>
+                        <div class="chart-legend">
+                            <div class="legend-item">
+                                <span class="legend-color" style="background-color: #3498db;"></span>
+                                <span>Modal</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background-color: #2ecc71;"></span>
+                                <span>Equity</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Transaction History -->
+                <div class="transaction-history">
+                    <div class="section-header">
+                        <h3>📋 Riwayat Transaksi Dana</h3>
+                        <div class="table-controls">
+                            <button class="table-action-btn" id="exportTransactions">
+                                <span class="btn-icon">📥</span>
+                                Export
+                            </button>
+                            <button class="table-action-btn" id="filterTransactions">
+                                <span class="btn-icon">🔍</span>
+                                Filter
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="transactionTable">
+                            <thead>
+                                <tr>
+                                    <th>Tanggal</th>
+                                    <th>Jenis</th>
+                                    <th>Jumlah</th>
+                                    <th>Metode</th>
+                                    <th>Keterangan</th>
+                                    <th>Saldo Setelah</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionTableBody">
+                                <tr class="loading-row">
+                                    <td colspan="7" style="text-align: center;">
+                                        <div class="loading-spinner-small"></div>
+                                        Loading transaction history...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="portfolio-actions">
+                    <button class="action-btn primary" id="addTopUpBtn">
+                        <span class="btn-icon">➕</span>
+                        Top Up Dana
+                    </button>
+                    <button class="action-btn secondary" id="addWithdrawBtn">
+                        <span class="btn-icon">➖</span>
+                        Withdraw Dana
+                    </button>
+                    <button class="action-btn tertiary" id="viewCashFlowBtn">
+                        <span class="btn-icon">📊</span>
+                        Cash Flow Report
+                    </button>
+                </div>
+            </section>
+            
         </main>
     </div>
 
@@ -702,10 +861,98 @@
             </div>
         </div>
     </div>
+        <!-- Modal untuk Top Up -->
+    <div id="topUpModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>💰 Top Up Dana</h2>
+            <form id="topUpForm">
+                <div class="form-group">
+                    <label for="topUpAmount">Jumlah (Rp):</label>
+                    <input type="number" id="topUpAmount" step="1000" min="1000" required>
+                    <div class="quick-amounts">
+                        <button type="button" class="quick-amount" data-amount="1000000">1 Juta</button>
+                        <button type="button" class="quick-amount" data-amount="5000000">5 Juta</button>
+                        <button type="button" class="quick-amount" data-amount="10000000">10 Juta</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="topUpMethod">Metode Transfer:</label>
+                    <select id="topUpMethod" required>
+                        <option value="">Pilih Metode</option>
+                        <option value="bank_transfer">Transfer Bank</option>
+                        <option value="e_wallet">E-Wallet</option>
+                        <option value="cash">Tunai</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="topUpNotes">Keterangan (Opsional):</label>
+                    <textarea id="topUpNotes" rows="2" placeholder="Contoh: Tambahan modal trading"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Konfirmasi Top Up</button>
+                    <button type="button" class="btn-secondary" id="cancelTopUp">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
     
+    <!-- Modal untuk Withdraw -->
+    <div id="withdrawModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>💸 Withdraw Dana</h2>
+            <div class="balance-info">
+                <div class="info-item">
+                    <span>Available Cash:</span>
+                    <span id="availableCash">Rp 0</span>
+                </div>
+                <div class="info-item">
+                    <span>Max Withdraw:</span>
+                    <span id="maxWithdraw">Rp 0</span>
+                </div>
+            </div>
+            
+            <form id="withdrawForm">
+                <div class="form-group">
+                    <label for="withdrawAmount">Jumlah (Rp):</label>
+                    <input type="number" id="withdrawAmount" step="1000" min="1000" required>
+                    <div class="quick-percentages">
+                        <button type="button" class="quick-percent" data-percent="25">25%</button>
+                        <button type="button" class="quick-percent" data-percent="50">50%</button>
+                        <button type="button" class="quick-percent" data-percent="75">75%</button>
+                        <button type="button" class="quick-percent" data-percent="100">100%</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="withdrawMethod">Metode Penarikan:</label>
+                    <select id="withdrawMethod" required>
+                        <option value="">Pilih Metode</option>
+                        <option value="bank_transfer">Transfer Bank</option>
+                        <option value="cash">Tunai</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="withdrawNotes">Keterangan (Opsional):</label>
+                    <textarea id="withdrawNotes" rows="2" placeholder="Contoh: Dana darurat"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Konfirmasi Withdraw</button>
+                    <button type="button" class="btn-secondary" id="cancelWithdraw">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
 
