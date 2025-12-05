@@ -215,42 +215,91 @@ function initializePortfolioData() {
     return portfolioData;
 }
 /* ===== PORTFOLIO FORM HELPER FUNCTIONS ===== */
-
+function formatNumber(num) {
+    if (num === undefined || num === null || isNaN(num)) return '0';
+    return new Intl.NumberFormat('id-ID').format(Math.round(num));
+}
 // 1. Show loading state
 function showPortfolioLoading(message = 'Memproses...') {
     console.log('⏳ showPortfolioLoading:', message);
     
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    if (loadingOverlay) {
-        loadingOverlay.style.display = 'flex';
-        const spinnerText = loadingOverlay.querySelector('p');
-        if (spinnerText) spinnerText.textContent = message;
-    } else {
-        console.warn('⚠️ Loading overlay not found');
-    }
+    // Simple implementation
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'portfolioLoading';
+    loadingDiv.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); display: flex; flex-direction: column;
+        justify-content: center; align-items: center; z-index: 9999;
+        color: white; font-family: sans-serif;
+    `;
+    
+    loadingDiv.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db; border-radius: 50%;
+                animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
+            <div style="color: #333; font-size: 16px;">${message}</div>
+        </div>
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    `;
+    
+    document.body.appendChild(loadingDiv);
 }
 
 // 2. Hide loading state
 function hidePortfolioLoading() {
     console.log('✅ hidePortfolioLoading');
-    
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    if (loadingOverlay) {
-        loadingOverlay.style.display = 'none';
-    }
+    const loading = document.getElementById('portfolioLoading');
+    if (loading) loading.remove();
 }
+
 
 // 3. Show notification (gunakan yang existing atau buat baru)
 function showPortfolioNotification(type, message) {
     console.log(`📢 showPortfolioNotification [${type}]:`, message);
     
-    // Gunakan notification function yang sudah ada jika ada
-    if (typeof showNotification === 'function') {
-        showNotification(type, message);
-    } else {
-        // Fallback ke alert
-        alert(`${type.toUpperCase()}: ${message}`);
-    }
+    // Create notification element
+    const notification = document.createElement('div');
+    const bgColor = type === 'success' ? '#2ecc71' : 
+                    type === 'error' ? '#e74c3c' : 
+                    type === 'warning' ? '#f39c12' : '#3498db';
+    
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; 
+        background: ${bgColor}; color: white; padding: 15px 20px;
+        border-radius: 5px; z-index: 10000; font-family: sans-serif;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 300px;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    notification.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 5px;">
+            ${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'} 
+            ${type.toUpperCase()}
+        </div>
+        <div>${message}</div>
+        <style>
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        </style>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 5000);
 }
 
 // 4. Validate transaction amount
@@ -264,16 +313,13 @@ function validateTransactionAmount(amount, type, availableCash = 0) {
         return { valid: false, error: 'Jumlah harus angka positif' };
     }
     
-    // Withdraw validation - TETAPI: di Apps Script belum ada validasi ini
-    // Jadi kita comment dulu untuk testing
-    /*
-    if (type === 'WITHDRAW' && numAmount > availableCash) {
-        return { 
-            valid: false, 
-            error: `Jumlah melebihi available cash (Rp ${formatNumber(availableCash)})` 
-        };
-    }
-    */
+    // ⭐⭐ TEMPORARY DISABLE untuk testing ⭐⭐
+    // if (type === 'WITHDRAW' && numAmount > availableCash) {
+    //     return { 
+    //         valid: false, 
+    //         error: `Jumlah melebihi available cash (Rp ${formatNumber(availableCash)})` 
+    //     };
+    // }
     
     return { valid: true };
 }
@@ -6024,7 +6070,7 @@ function setupTopUpForm() {
     const newForm = form.cloneNode(true);
     form.parentNode.replaceChild(newForm, form);
     
-    // Quick amount buttons
+    // Quick amount buttons - FIXED
     document.querySelectorAll('.quick-amount').forEach(btn => {
         btn.addEventListener('click', function() {
             const amount = this.getAttribute('data-amount');
@@ -6034,31 +6080,48 @@ function setupTopUpForm() {
             document.querySelectorAll('.quick-amount').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
+            // ⭐⭐ FIX: Pakai formatNumber yang sudah didefinisikan ⭐⭐
             console.log(`💰 Quick amount selected: Rp ${formatNumber(amount)}`);
         });
     });
     
-    // Form submission
+    // Form submission - FIXED validation
     newForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         console.log('📝 Top Up form submitted');
         
+        // Get form values
+        const amountInput = document.getElementById('topUpAmount');
+        const methodSelect = document.getElementById('topUpMethod');
+        const notesInput = document.getElementById('topUpNotes');
+        
+        // Basic validation
+        if (!amountInput.value || Number(amountInput.value) <= 0) {
+            showPortfolioNotification('error', '❌ Jumlah harus diisi dan lebih dari 0');
+            amountInput.focus();
+            return;
+        }
+        
         const formData = {
             type: 'TOP_UP',
-            amount: document.getElementById('topUpAmount').value,
-            method: document.getElementById('topUpMethod').value,
-            notes: document.getElementById('topUpNotes').value
+            amount: amountInput.value,
+            method: methodSelect.value || 'BANK_TRANSFER',
+            notes: notesInput.value || ''
         };
         
         console.log('📋 Form data:', formData);
         
         const result = await addPortfolioTransaction(formData);
         
-        if (result.success) {
+        if (result && result.success) {
             // Close modal
             document.getElementById('topUpModal').style.display = 'none';
             // Reset form
-            resetPortfolioForm('topUpForm');
+            this.reset();
+            // Reset quick buttons
+            document.querySelectorAll('.quick-amount').forEach(btn => {
+                btn.classList.remove('active');
+            });
         }
     });
     
@@ -6072,20 +6135,28 @@ function setupWithdrawForm() {
     const form = document.getElementById('withdrawForm');
     if (!form) {
         console.warn('⚠️ Withdraw form not found');
-        return;
+        return () => {}; // Return empty function
     }
     
     // Remove existing listeners
     const newForm = form.cloneNode(true);
     form.parentNode.replaceChild(newForm, form);
     
-    // Update available cash info
-    function updateWithdrawInfo() {
+    // Function untuk update cash info
+    const updateCashInfo = () => {
         const availableCash = portfolioData.summary?.availableCash || 0;
-        document.getElementById('availableCash').textContent = `Rp ${formatNumber(availableCash)}`;
-        document.getElementById('maxWithdraw').textContent = `Rp ${formatNumber(availableCash)}`;
-        console.log(`💰 Updated withdraw info - Available: Rp ${formatNumber(availableCash)}`);
-    }
+        const availableCashEl = document.getElementById('availableCash');
+        const maxWithdrawEl = document.getElementById('maxWithdraw');
+        
+        if (availableCashEl) {
+            availableCashEl.textContent = `Rp ${formatNumber(availableCash)}`;
+        }
+        if (maxWithdrawEl) {
+            maxWithdrawEl.textContent = `Rp ${formatNumber(availableCash)}`;
+        }
+        
+        console.log(`💰 Updated cash info: Rp ${formatNumber(availableCash)}`);
+    };
     
     // Quick percentage buttons
     document.querySelectorAll('.quick-percent').forEach(btn => {
@@ -6120,19 +6191,20 @@ function setupWithdrawForm() {
         
         const result = await addPortfolioTransaction(formData);
         
-        if (result.success) {
+        if (result && result.success) {
             // Close modal
             document.getElementById('withdrawModal').style.display = 'none';
             // Reset form
-            resetPortfolioForm('withdrawForm');
+            this.reset();
+            // Reset quick buttons
+            document.querySelectorAll('.quick-percent').forEach(btn => {
+                btn.classList.remove('active');
+            });
         }
     });
     
-    // Update info initially
-    updateWithdrawInfo();
-    
     console.log('✅ setupWithdrawForm: Completed');
-    return updateWithdrawInfo; // Return function untuk update nanti
+    return updateCashInfo; // Return the update function
 }
 // Test function untuk verify frontend-backend integration
 async function testPortfolioIntegration() {
@@ -6188,7 +6260,16 @@ async function testPortfolioIntegration() {
 
 function setupPortfolioModals() {
     console.log('🔄 setupPortfolioModals: Initializing...');
+    // Setup forms terlebih dahulu
+    setupTopUpForm();
     
+    // Setup withdraw form dan dapatkan update function
+    let updateWithdrawInfo = () => {};
+    try {
+        updateWithdrawInfo = setupWithdrawForm() || (() => {});
+    } catch (error) {
+        console.warn('⚠️ setupWithdrawForm error:', error);
+    }
     // 1. Top Up Modal
     const topUpBtn = document.getElementById('addTopUpBtn');
     const topUpModal = document.getElementById('topUpModal');
@@ -6196,10 +6277,17 @@ function setupPortfolioModals() {
     if (topUpBtn && topUpModal) {
         topUpBtn.addEventListener('click', () => {
             console.log('💰 Top Up button clicked');
-            resetPortfolioForm('topUpForm');
-            topUpModal.style.display = 'block';
+            
+            // Reset form
+            const form = document.getElementById('topUpForm');
+            if (form) form.reset();
+            
+            // Reset quick buttons
+            document.querySelectorAll('.quick-amount').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        topUpModal.style.display = 'block';
         });
-        
         // Close with X button
         const topUpClose = topUpModal.querySelector('.close');
         if (topUpClose) {
@@ -6236,10 +6324,21 @@ function setupPortfolioModals() {
     const updateWithdrawInfo = setupWithdrawForm(); // Setup form dan dapatkan update function
     
     if (withdrawBtn && withdrawModal) {
-        withdrawBtn.addEventListener('click', () => {
+       withdrawBtn.addEventListener('click', () => {
             console.log('💸 Withdraw button clicked');
-            resetPortfolioForm('withdrawForm');
-            if (updateWithdrawInfo) updateWithdrawInfo(); // Update cash info
+            
+            // Reset form
+            const form = document.getElementById('withdrawForm');
+            if (form) form.reset();
+            
+            // Reset quick buttons
+            document.querySelectorAll('.quick-percent').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Update cash info
+            updateWithdrawInfo();
+            
             withdrawModal.style.display = 'block';
         });
         
@@ -7552,6 +7651,7 @@ function runPortfolioGETTest() {
         }
     });
 }
+
 
 
 
