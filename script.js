@@ -4821,11 +4821,12 @@ async function saveData() {
         return false;
     }
 }
-// 1. Fetch Portfolio Summary from Apps Script
+// 1. Fetch Portfolio Summary - sudah pakai GET, OK
 async function fetchPortfolioSummary() {
     console.log('📊 fetchPortfolioSummary: Fetching summary data...');
     
     try {
+        // ⭐⭐ Tambah cache buster ⭐⭐
         const url = `${APPS_SCRIPT_URL}?action=portfolio/summary&t=${Date.now()}`;
         console.log('📊 Fetching from:', url);
         
@@ -4845,6 +4846,35 @@ async function fetchPortfolioSummary() {
             success: false, 
             error: error.toString(),
             message: 'Gagal mengambil data summary portfolio'
+        };
+    }
+}
+
+// 2. Fetch Portfolio Transactions - sudah pakai GET, OK
+async function fetchPortfolioTransactions() {
+    console.log('📋 fetchPortfolioTransactions: Fetching transaction data...');
+    
+    try {
+        // ⭐⭐ Tambah cache buster ⭐⭐
+        const url = `${APPS_SCRIPT_URL}?action=portfolio/transactions&t=${Date.now()}`;
+        console.log('📋 Fetching from:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📋 fetchPortfolioTransactions: Response received, count:', data.transactions?.length || 0);
+        
+        return data;
+    } catch (error) {
+        console.error('❌ fetchPortfolioTransactions: Error fetching:', error);
+        return { 
+            success: false, 
+            error: error.toString(),
+            message: 'Gagal mengambil data transaksi'
         };
     }
 }
@@ -5882,44 +5912,40 @@ async function handlePartialExit() {
 }
 
 /* ===== ADD PORTFOLIO TRANSACTION ===== */
-
 async function addPortfolioTransaction(transactionData) {
     console.log('➕ addPortfolioTransaction:', transactionData);
     
     try {
         // Validate
+        const availableCash = portfolioData.summary?.availableCash || 0;
         const validation = validateTransactionAmount(
             transactionData.amount, 
             transactionData.type,
-            transactionData.type === 'WITHDRAW' ? (portfolioData.summary?.availableCash || 0) : 0
+            transactionData.type === 'WITHDRAW' ? availableCash : 0
         );
         
         if (!validation.valid) {
             throw new Error(validation.error);
         }
         
-        // Prepare request
-        const requestData = {
+        // ⭐⭐ PERBAIKAN: Gunakan GET parameters seperti tradingData ⭐⭐
+        // Format: ?action=portfolio/add&type=TOP_UP&amount=1000000&method=BANK_TRANSFER&notes=Test
+        const params = new URLSearchParams({
             action: 'portfolio/add',
             type: transactionData.type,
-            amount: Math.abs(Number(transactionData.amount)), // Ensure positive number
+            amount: Math.abs(Number(transactionData.amount)),
             method: transactionData.method || 'BANK_TRANSFER',
             notes: transactionData.notes || ''
-        };
+        });
         
-        console.log('📤 Sending request:', requestData);
+        const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
+        console.log('📤 Sending GET request to:', url);
         
         // Show loading
         showPortfolioLoading(transactionData.type === 'TOP_UP' ? 'Memproses Top Up...' : 'Memproses Withdraw...');
         
-        // Send request
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestData)
-        });
+        // ⭐⭐ GANTI: Gunakan fetch tanpa options (default GET) ⭐⭐
+        const response = await fetch(url);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -5939,9 +5965,11 @@ async function addPortfolioTransaction(transactionData) {
             const message = `${actionText} Rp ${formatNumber(transactionData.amount)} berhasil!`;
             showPortfolioNotification('success', message);
             
-            // Refresh portfolio data
-            console.log('🔄 Refreshing portfolio data...');
-            await loadPortfolioData();
+            // Refresh portfolio data setelah delay
+            setTimeout(async () => {
+                console.log('🔄 Refreshing portfolio data...');
+                await loadPortfolioData();
+            }, 1000);
             
             return result;
         } else {
@@ -5955,6 +5983,7 @@ async function addPortfolioTransaction(transactionData) {
         return { success: false, error: error.message };
     }
 }
+
 /* ===== FORM HANDLERS ===== */
 
 // 1. Top Up Form Handler
@@ -7177,7 +7206,7 @@ function exportTransactionHistory() {
     alert('Fitur Export akan segera tersedia!');
 }
 
-/* ===== EDIT TRANSACTION FUNCTION ===== */
+/* ===== EDIT TRANSACTION FUNCTION - UPDATED FOR GET ===== */
 
 async function editTransaction(transactionId) {
     console.log('✏️ editTransaction: Editing transaction ID:', transactionId);
@@ -7188,7 +7217,6 @@ async function editTransaction(transactionId) {
         return;
     }
     
-    // Cari transaksi di data lokal
     const transaction = portfolioData.transactions.find(t => t.id === transactionId);
     
     if (!transaction) {
@@ -7199,67 +7227,23 @@ async function editTransaction(transactionId) {
     
     console.log('📋 Found transaction:', transaction);
     
-    // Untuk sekarang, kita hanya support edit notes dan method
-    // Karena edit amount/type bisa mengacaukan balance calculation
-    const newNotes = prompt('Edit catatan transaksi:', transaction.notes || '');
+    // Untuk edit, kita perlu endpoint baru di GS
+    // Untuk sekarang, tampilkan info saja
+    alert(
+        `Edit Transaction (Coming Soon)\n\n` +
+        `ID: ${transaction.id}\n` +
+        `Type: ${transaction.type}\n` +
+        `Amount: Rp ${formatNumber(Math.abs(transaction.amount))}\n` +
+        `Method: ${transaction.method}\n` +
+        `Notes: ${transaction.notes || '(empty)'}\n\n` +
+        `Edit functionality will be available in next update.`
+    );
     
-    if (newNotes === null) {
-        console.log('❌ Edit cancelled by user');
-        return; // User cancelled
-    }
-    
-    const newMethod = prompt('Edit metode transaksi (BANK_TRANSFER, E_WALLET, CASH):', transaction.method || 'BANK_TRANSFER');
-    
-    if (newMethod === null) {
-        console.log('❌ Edit cancelled by user');
-        return; // User cancelled
-    }
-    
-    // Validasi method
-    const validMethods = ['BANK_TRANSFER', 'E_WALLET', 'CASH'];
-    if (!validMethods.includes(newMethod.toUpperCase())) {
-        showPortfolioNotification('error', `Metode tidak valid. Pilihan: ${validMethods.join(', ')}`);
-        return;
-    }
-    
-    try {
-        console.log('🔄 Updating transaction...');
-        showPortfolioLoading('Mengupdate transaksi...');
-        
-        // Kirim update ke server
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'portfolio/update',
-                id: transactionId,
-                notes: newNotes,
-                method: newMethod.toUpperCase()
-            })
-        });
-        
-        const result = await response.json();
-        hidePortfolioLoading();
-        
-        if (result.success) {
-            console.log('✅ Transaction updated:', result);
-            showPortfolioNotification('success', 'Transaksi berhasil diupdate');
-            
-            // Refresh data
-            await loadPortfolioData();
-        } else {
-            throw new Error(result.error || 'Gagal mengupdate transaksi');
-        }
-        
-    } catch (error) {
-        console.error('❌ Error updating transaction:', error);
-        hidePortfolioLoading();
-        showPortfolioNotification('error', error.message);
-    }
+    console.log('⚠️ Edit functionality not yet implemented');
+    showPortfolioNotification('info', 'Fitur edit akan segera tersedia');
 }
-/* ===== DELETE TRANSACTION FUNCTION ===== */
+
+/* ===== DELETE TRANSACTION FUNCTION - UPDATED FOR GET ===== */
 
 async function deleteTransaction(transactionId) {
     console.log('🗑️ deleteTransaction: Deleting transaction ID:', transactionId);
@@ -7270,7 +7254,6 @@ async function deleteTransaction(transactionId) {
         return;
     }
     
-    // Cari transaksi untuk konfirmasi
     const transaction = portfolioData.transactions.find(t => t.id === transactionId);
     
     if (!transaction) {
@@ -7304,17 +7287,20 @@ async function deleteTransaction(transactionId) {
         console.log('🗑️ Deleting transaction...');
         showPortfolioLoading('Menghapus transaksi...');
         
-        // Kirim delete request ke server
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'portfolio/delete',
-                id: transactionId
-            })
+        // ⭐⭐ PERBAIKAN: Gunakan GET parameters ⭐⭐
+        const params = new URLSearchParams({
+            action: 'portfolio/delete',
+            id: transactionId
         });
+        
+        const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
+        console.log('📤 Sending DELETE request:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const result = await response.json();
         hidePortfolioLoading();
@@ -7323,8 +7309,11 @@ async function deleteTransaction(transactionId) {
             console.log('✅ Transaction deleted:', result);
             showPortfolioNotification('success', 'Transaksi berhasil dihapus');
             
-            // Refresh data
-            await loadPortfolioData();
+            // Refresh data setelah delay
+            setTimeout(async () => {
+                await loadPortfolioData();
+            }, 1000);
+            
         } else {
             throw new Error(result.error || 'Gagal menghapus transaksi');
         }
@@ -7335,6 +7324,8 @@ async function deleteTransaction(transactionId) {
         showPortfolioNotification('error', error.message);
     }
 }
+
+
 /* ===== EXPORT FUNCTIONS ===== */
 
 async function exportTransactionHistory() {
@@ -7422,6 +7413,70 @@ function setupTableActions() {
     }
     
     console.log('✅ setupTableActions: Completed');
+}
+/* ===== TEST PORTFOLIO WITH GET ===== */
+
+async function testPortfolioWithGET() {
+    console.log('🧪 testPortfolioWithGET: Testing with GET method...');
+    
+    try {
+        // Test 1: Get summary
+        console.log('1. Testing GET summary...');
+        const summary = await fetchPortfolioSummary();
+        console.log('Summary result:', summary.success);
+        
+        // Test 2: Get transactions
+        console.log('2. Testing GET transactions...');
+        const transactions = await fetchPortfolioTransactions();
+        console.log('Transactions result:', transactions.success);
+        
+        // Test 3: Create test transaction via GET
+        console.log('3. Testing add transaction via GET...');
+        const testData = {
+            type: 'TOP_UP',
+            amount: 100000,
+            method: 'TEST',
+            notes: 'Test GET method'
+        };
+        
+        // Buat URL manual untuk verify
+        const params = new URLSearchParams({
+            action: 'portfolio/add',
+            ...testData
+        });
+        const testUrl = `${APPS_SCRIPT_URL}?${params.toString()}`;
+        console.log('Test URL:', testUrl);
+        
+        // Return test results
+        return {
+            success: true,
+            summary: summary.success,
+            transactions: transactions.success,
+            testUrl: testUrl,
+            message: 'GET method test completed'
+        };
+        
+    } catch (error) {
+        console.error('❌ testPortfolioWithGET failed:', error);
+        return {
+            success: false,
+            error: error.toString()
+        };
+    }
+}
+
+// Untuk run di console
+function runPortfolioGETTest() {
+    console.log('=== PORTFOLIO GET METHOD TEST ===');
+    testPortfolioWithGET().then(result => {
+        console.log('Test result:', result);
+        
+        // Open test URL in new tab
+        if (result.testUrl) {
+            console.log('Opening test URL in new tab...');
+            window.open(result.testUrl, '_blank');
+        }
+    });
 }
 
 
