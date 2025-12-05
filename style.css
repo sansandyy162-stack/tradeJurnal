@@ -2761,3 +2761,51 @@ button {
         font-size: 20px;
     }
 }
+
+/* Transaction Badges */
+.transaction-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.topup-badge {
+    background-color: #e8f6f3;
+    color: #27ae60;
+    border: 1px solid #2ecc71;
+}
+
+.withdraw-badge {
+    background-color: #fdedec;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+}
+
+/* Action Buttons in Table */
+#transactionTable .action-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    margin: 0 2px;
+    min-height: auto;
+}
+
+#transactionTable .edit-btn {
+    background-color: #f39c12;
+    color: white;
+}
+
+#transactionTable .delete-btn {
+    background-color: #e74c3c;
+    color: white;
+}
+
+#transactionTable .edit-btn:hover {
+    background-color: #e67e22;
+}
+
+#transactionTable .delete-btn:hover {
+    background-color: #c0392b;
+}
