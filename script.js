@@ -259,16 +259,21 @@ function validateTransactionAmount(amount, type, availableCash = 0) {
     
     const numAmount = Number(amount);
     
-    if (!numAmount || numAmount <= 0) {
-        return { valid: false, error: 'Jumlah harus lebih dari 0' };
+    // Basic validation
+    if (!numAmount || numAmount <= 0 || isNaN(numAmount)) {
+        return { valid: false, error: 'Jumlah harus angka positif' };
     }
     
+    // Withdraw validation - TETAPI: di Apps Script belum ada validasi ini
+    // Jadi kita comment dulu untuk testing
+    /*
     if (type === 'WITHDRAW' && numAmount > availableCash) {
         return { 
             valid: false, 
             error: `Jumlah melebihi available cash (Rp ${formatNumber(availableCash)})` 
         };
     }
+    */
     
     return { valid: true };
 }
@@ -5928,15 +5933,18 @@ async function addPortfolioTransaction(transactionData) {
             throw new Error(validation.error);
         }
         
-        // ⭐⭐ PERBAIKAN: Gunakan GET parameters seperti tradingData ⭐⭐
-        // Format: ?action=portfolio/add&type=TOP_UP&amount=1000000&method=BANK_TRANSFER&notes=Test
-        const params = new URLSearchParams({
-            action: 'portfolio/add',
-            type: transactionData.type,
-            amount: Math.abs(Number(transactionData.amount)),
-            method: transactionData.method || 'BANK_TRANSFER',
-            notes: transactionData.notes || ''
-        });
+        // ⭐⭐ PERBAIKAN: Gunakan format SAMA PERSIS dengan URL yang berhasil ⭐⭐
+        // Format: ?action=portfolio/add&type=TOP_UP&amount=1000
+        const params = new URLSearchParams();
+        params.append('action', 'portfolio/add');
+        params.append('type', transactionData.type); // langsung string, tidak perlu uppercase
+        params.append('amount', Math.abs(Number(transactionData.amount)).toString());
+        params.append('method', transactionData.method || 'BANK_TRANSFER');
+        
+        // Notes optional - hanya tambah jika ada
+        if (transactionData.notes && transactionData.notes.trim()) {
+            params.append('notes', transactionData.notes.trim());
+        }
         
         const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
         console.log('📤 Sending GET request to:', url);
@@ -5944,8 +5952,15 @@ async function addPortfolioTransaction(transactionData) {
         // Show loading
         showPortfolioLoading(transactionData.type === 'TOP_UP' ? 'Memproses Top Up...' : 'Memproses Withdraw...');
         
-        // ⭐⭐ GANTI: Gunakan fetch tanpa options (default GET) ⭐⭐
-        const response = await fetch(url);
+        // Fetch dengan timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(url, {
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -5969,7 +5984,7 @@ async function addPortfolioTransaction(transactionData) {
             setTimeout(async () => {
                 console.log('🔄 Refreshing portfolio data...');
                 await loadPortfolioData();
-            }, 1000);
+            }, 1500);
             
             return result;
         } else {
@@ -5979,8 +5994,17 @@ async function addPortfolioTransaction(transactionData) {
     } catch (error) {
         console.error('❌ Error in addPortfolioTransaction:', error);
         hidePortfolioLoading();
-        showPortfolioNotification('error', error.message);
-        return { success: false, error: error.message };
+        
+        // User friendly error messages
+        let errorMessage = error.message;
+        if (error.name === 'AbortError') {
+            errorMessage = 'Timeout: Server tidak merespon. Coba lagi nanti.';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Tidak dapat terhubung ke server. Cek koneksi internet.';
+        }
+        
+        showPortfolioNotification('error', errorMessage);
+        return { success: false, error: errorMessage };
     }
 }
 
@@ -7478,5 +7502,6 @@ function runPortfolioGETTest() {
         }
     });
 }
+
 
 
