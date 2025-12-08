@@ -6360,6 +6360,14 @@ document.addEventListener('DOMContentLoaded', function() {
 // SECTION 11: eror after refactor
 // ================================
 // not defined
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
 function addDebugRefreshButton() {
     if (document.getElementById('debug-refresh-btn')) return;
     
