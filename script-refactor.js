@@ -6355,3 +6355,470 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
 });
 // Setup Functions (dipanggil dalam initializeApp)
+
+// ================================
+// SECTION 11: eror after refactor
+// ================================
+// not defined
+function addDebugRefreshButton() {
+    if (document.getElementById('debug-refresh-btn')) return;
+    
+    const btn = document.createElement('button');
+    btn.id = 'debug-refresh-btn';
+    btn.innerHTML = '🔄 Debug Refresh';
+    btn.style.cssText = `
+        position: fixed;
+        bottom: 70px;
+        right: 20px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 9999;
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    `;
+    
+    btn.addEventListener('click', function() {
+        console.log('🔧 DEBUG: Manual refresh triggered');
+        console.log('📊 TradingData count:', tradingData.length);
+        console.log('📋 All data:', tradingData);
+        
+        // Panggil hard refresh
+        hardRefreshDashboard();
+        
+        // Show debug info
+        const stockCount = {};
+        tradingData.forEach(item => {
+            stockCount[item.kodeSaham] = (stockCount[item.kodeSaham] || 0) + 1;
+        });
+        
+        alert(`DEBUG INFO:\nTotal data: ${tradingData.length}\nStocks: ${JSON.stringify(stockCount)}`);
+    });
+    
+    document.body.appendChild(btn);
+}
+async function loadData() {
+    try {
+        console.log('🔄 Mengambil data dari Google Sheets...');
+        updateLoadingStatus('Mengambil data dari Google Sheets...');
+        
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=getData`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('📦 Response dari server:', result);
+        
+        if (result.error) {
+            console.warn('Server returned warning:', result.error);
+            tradingData = [];
+            return;
+        }
+        
+        if (result.data && result.data.length > 0) {
+            tradingData = result.data.map((row, index) => {
+                if (index === 0 && row[0] === 'ID') return null;
+                
+                return {
+                    id: row[0] || generateId(),
+                    tanggalMasuk: formatDateForInput(row[1]) || new Date().toISOString().split('T')[0],
+                    tanggalKeluar: formatDateForInput(row[2]) || new Date().toISOString().split('T')[0],
+                    kodeSaham: row[3] || 'UNKNOWN',
+                    hargaMasuk: parseFloat(row[4]) || 0,
+                    hargaKeluar: parseFloat(row[5]) || 0,
+                    lot: parseInt(row[6]) || 1,
+                    feeBuy: parseFloat(row[7]) || 0,
+                    feeSell: parseFloat(row[8]) || 0,
+                    totalFee: parseFloat(row[9]) || 0,
+                    profitLoss: parseFloat(row[10]) || 0,
+                    metodeTrading: row[11] || 'Scalping',
+                    catatan: row[12] || '',
+                    positionData: row[13] ? parsePositionData(row[13]) : null
+                };
+            }).filter(item => item !== null);
+            
+            console.log(`✅ Load ${tradingData.length} records berhasil`);
+            
+            // Rebuild positions dari PositionData
+            rebuildPositionsFromData();
+        } else {
+            tradingData = [];
+            console.log('ℹ️ Tidak ada data di Google Sheets');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error loading data from server:', error);
+        tradingData = [];
+        throw error; // Re-throw untuk ditangkap oleh initializeApp
+    }
+}
+function analyzeSahamPerformance() {
+    const sahamData = {};
+    
+    tradingData.forEach(trade => {
+        if (!sahamData[trade.kodeSaham]) {
+            sahamData[trade.kodeSaham] = {
+                totalTrades: 0,
+                wins: 0,
+                losses: 0,
+                totalProfit: 0,
+                profits: []
+            };
+        }
+        
+        const data = sahamData[trade.kodeSaham];
+        data.totalTrades++;
+        data.totalProfit += trade.profitLoss;
+        data.profits.push(trade.profitLoss);
+        
+        if (trade.profitLoss > 0) {
+            data.wins++;
+        } else if (trade.profitLoss < 0) {
+            data.losses++;
+        }
+    });
+    
+    return sahamData;
+}
+function toggleComparison(enable) {
+    console.log(`🔄 toggleComparison: ${enable ? 'ON' : 'OFF'}`);
+    
+    dashboardState.comparison.enabled = enable;
+    
+    const comparisonSection = document.getElementById('comparisonSection');
+    if (comparisonSection) {
+        comparisonSection.style.display = enable ? 'block' : 'none';
+    }
+    
+    if (enable) {
+        calculateComparisonData();
+    } else {
+        // Clear trend displays
+        document.querySelectorAll('.metric-trend').forEach(el => {
+            el.textContent = '';
+            el.className = 'metric-trend';
+        });
+    }
+    
+    saveDashboardState();
+}
+function setupWithdrawForm() {
+    console.log('🔄 setupWithdrawForm: Initializing...');
+    
+    const form = document.getElementById('withdrawForm');
+    if (!form) {
+        console.warn('⚠️ Withdraw form not found');
+        return () => {}; // Return empty function
+    }
+    
+    // Remove existing listeners
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+    
+    // Function untuk update cash info
+    const updateCashInfo = () => {
+        const availableCash = portfolioData.summary?.availableCash || 0;
+        const availableCashEl = document.getElementById('availableCash');
+        const maxWithdrawEl = document.getElementById('maxWithdraw');
+        
+        if (availableCashEl) {
+            availableCashEl.textContent = `Rp ${formatNumber(availableCash)}`;
+        }
+        if (maxWithdrawEl) {
+            maxWithdrawEl.textContent = `Rp ${formatNumber(availableCash)}`;
+        }
+        
+        console.log(`💰 Updated cash info: Rp ${formatNumber(availableCash)}`);
+    };
+    
+    // Quick percentage buttons
+    document.querySelectorAll('.quick-percent').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const percent = parseInt(this.getAttribute('data-percent'));
+            const availableCash = portfolioData.summary?.availableCash || 0;
+            const amount = Math.floor((availableCash * percent) / 100);
+            
+            document.getElementById('withdrawAmount').value = amount;
+            
+            // Highlight active button
+            document.querySelectorAll('.quick-percent').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            console.log(`📊 Quick ${percent}% selected: Rp ${formatNumber(amount)}`);
+        });
+    });
+    
+    // Form submission
+    newForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        console.log('📝 Withdraw form submitted');
+        
+        const formData = {
+            type: 'WITHDRAW',
+            amount: document.getElementById('withdrawAmount').value,
+            method: document.getElementById('withdrawMethod').value,
+            notes: document.getElementById('withdrawNotes').value
+        };
+        
+        console.log('📋 Form data:', formData);
+        
+        const result = await addPortfolioTransaction(formData);
+        
+        if (result && result.success) {
+            // Close modal
+            document.getElementById('withdrawModal').style.display = 'none';
+            // Reset form
+            this.reset();
+            // Reset quick buttons
+            document.querySelectorAll('.quick-percent').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        }
+    });
+    
+    console.log('✅ setupWithdrawForm: Completed');
+    return updateCashInfo; // Return the update function
+}
+async function exportTransactionHistory() {
+    console.log('📤 exportTransactionHistory: Exporting data...');
+    
+    try {
+        if (!portfolioData.transactions || portfolioData.transactions.length === 0) {
+            showPortfolioNotification('warning', 'Tidak ada data transaksi untuk diexport');
+            return;
+        }
+        
+        showPortfolioLoading('Menyiapkan data export...');
+        
+        // Format data untuk CSV
+        const headers = ['Tanggal', 'Waktu', 'Jenis', 'Jumlah', 'Metode', 'Catatan', 'Saldo Setelah'];
+        
+        const csvData = portfolioData.transactions.map(trans => {
+            const date = new Date(trans.timestamp);
+            return [
+                date.toLocaleDateString('id-ID'),
+                date.toLocaleTimeString('id-ID'),
+                trans.type,
+                trans.type === 'TOP_UP' ? `+${trans.amount}` : `-${trans.amount}`,
+                trans.method || '',
+                trans.notes || '',
+                trans.balanceAfter || 0
+            ];
+        });
+        
+        // Tambah summary
+        csvData.unshift([]);
+        csvData.unshift(['TOTAL TOP UP', portfolioData.summary?.totalTopUp || 0]);
+        csvData.unshift(['TOTAL WITHDRAW', portfolioData.summary?.totalWithdraw || 0]);
+        csvData.unshift(['TOTAL EQUITY', portfolioData.summary?.totalEquity || 0]);
+        csvData.unshift(['AVAILABLE CASH', portfolioData.summary?.availableCash || 0]);
+        csvData.unshift(['=== SUMMARY ===']);
+        
+        // Convert ke CSV
+        const csvContent = [
+            headers.join(','),
+            ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        // Create download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `portfolio-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        hidePortfolioLoading();
+        console.log('✅ Export completed, file downloaded');
+        showPortfolioNotification('success', `Data ${portfolioData.transactions.length} transaksi berhasil diexport`);
+        
+    } catch (error) {
+        console.error('❌ Error exporting transaction history:', error);
+        hidePortfolioLoading();
+        showPortfolioNotification('error', 'Gagal mengexport data: ' + error.message);
+    }
+}
+function analyzeMetodePerformance() {
+    const metodeData = {};
+    
+    tradingData.forEach(trade => {
+        if (!metodeData[trade.metodeTrading]) {
+            metodeData[trade.metodeTrading] = {
+                totalTrades: 0,
+                wins: 0,
+                losses: 0,
+                totalProfit: 0,
+                profits: []
+            };
+        }
+        
+        const data = metodeData[trade.metodeTrading];
+        data.totalTrades++;
+        data.totalProfit += trade.profitLoss;
+        data.profits.push(trade.profitLoss);
+        
+        if (trade.profitLoss > 0) {
+            data.wins++;
+        } else if (trade.profitLoss < 0) {
+            data.losses++;
+        }
+    });
+    
+    return metodeData;
+}
+function updatePerformanceCharts() {
+    const metodeData = analyzeMetodePerformance();
+    
+    // Win Rate Chart
+    const winRateCtx = document.getElementById('winRateChart');
+    if (winRateCtx) {
+        if (winRateChart) winRateChart.destroy();
+        
+        const methods = Object.keys(metodeData);
+        const winRates = methods.map(method => {
+            const data = metodeData[method];
+            return data.totalTrades > 0 ? (data.wins / data.totalTrades * 100) : 0;
+        });
+        
+        winRateChart = new Chart(winRateCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: methods,
+                datasets: [{
+                    label: 'Win Rate (%)',
+                    data: winRates,
+                    backgroundColor: '#3498db'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+    
+    // Distribution Chart
+    const distributionCtx = document.getElementById('distributionChart');
+    if (distributionCtx) {
+        if (distributionChart) distributionChart.destroy();
+        
+        const profitRanges = {
+            'Loss Besar (< -1M)': 0,
+            'Loss Sedang (-1M - -100K)': 0,
+            'Loss Kecil (-100K - 0)': 0,
+            'Profit Kecil (0 - 100K)': 0,
+            'Profit Sedang (100K - 1M)': 0,
+            'Profit Besar (> 1M)': 0
+        };
+        
+        tradingData.forEach(trade => {
+            const profit = trade.profitLoss;
+            if (profit < -1000000) profitRanges['Loss Besar (< -1M)']++;
+            else if (profit < -100000) profitRanges['Loss Sedang (-1M - -100K)']++;
+            else if (profit < 0) profitRanges['Loss Kecil (-100K - 0)']++;
+            else if (profit < 100000) profitRanges['Profit Kecil (0 - 100K)']++;
+            else if (profit < 1000000) profitRanges['Profit Sedang (100K - 1M)']++;
+            else profitRanges['Profit Besar (> 1M)']++;
+        });
+        
+        distributionChart = new Chart(distributionCtx.getContext('2d'), {
+            type: 'pie',
+            data: {
+                labels: Object.keys(profitRanges),
+                datasets: [{
+                    data: Object.values(profitRanges),
+                    backgroundColor: [
+                        '#e74c3c', '#f39c12', '#f1c40f', 
+                        '#2ecc71', '#27ae60', '#16a085'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true
+            }
+        });
+    }
+}
+async function deleteTradingData(id) {
+    const userConfirmed = await showConfirmationModal(
+        '🗑️ Hapus Data Trading',
+        'Apakah Anda yakin ingin menghapus data trading ini?\n\nTindakan ini tidak dapat dibatalkan.'
+    );
+    
+    if (!userConfirmed) {
+        console.log('❌ User cancelled delete operation');
+        return;
+    }
+    
+    // Tampilkan loading
+    showLoading('Menghapus data dari Google Sheets...');
+    
+    tradingData = tradingData.filter(item => item.id !== id);
+    
+    // Simpan perubahan
+    await saveData();
+    
+    // Sembunyikan loading
+    hideLoading();
+    
+    // Update tampilan
+    // ⭐⭐ PERBAIKAN: Force update semua tampilan ⭐⭐
+    forceUpdateAllDisplays();
+    // updateHomeSummary();
+    // displayTradingData();
+    
+    showNotification('success', '✅ Data Dihapus', 'Data trading berhasil dihapus dari sistem!', true);
+}
+async function saveData() {
+    console.log('💾 Menyimpan data ke Google Sheets...');
+    
+    try {
+        // ⭐ UPDATE: Sertakan PositionData dalam data yang disimpan
+        const dataToSave = tradingData.map(item => ({
+            ...item,
+            positionData: serializePositionData(item.positionData)
+        }));
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'saveAllData',
+                jsonData: JSON.stringify(tradingData)
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(`Google Sheets error: ${result.error}`);
+        }
+        
+        console.log('✅ Data berhasil disimpan ke Google Sheets');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Gagal menyimpan ke Google Sheets:', error);
+        alert('❌ Gagal menyimpan data ke Google Sheets!\n\nError: ' + error.message);
+        return false;
+    }
+}
