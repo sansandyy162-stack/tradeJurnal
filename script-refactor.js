@@ -779,7 +779,7 @@ async function processPendingSync() {
             
             // Update tradingData dengan data terbaru
             tradingData = allData;
-            
+            syncPortfolioWithTradingData();
             // Update UI
             updatePendingBadge();
             updateHomeSummary();
@@ -796,6 +796,7 @@ async function processPendingSync() {
         showSyncErrorNotification();
     }
 }
+
 // Smart Save System
 async function smartSaveData() {
     console.log('💾 Smart save process started...');
@@ -855,6 +856,9 @@ async function smartSaveData() {
         if (response.ok) {
             const result = await response.json();
             console.log('✅ Data saved directly to Sheets:', result);
+            setTimeout(() => {
+                syncPortfolioWithTradingData();
+            }, 300);
             
             showOnlineSuccessNotification();
             return { success: true, mode: 'online' };
@@ -929,6 +933,9 @@ async function smartSavePositionData(positionData) {
         if (response.ok) {
             const result = await response.json();
             console.log('✅ Position data saved directly to Sheets:', result);
+            setTimeout(() => {
+                syncPortfolioWithTradingData();
+           }, 300);
             
             showOnlineSuccessNotification();
             return { success: true, mode: 'online' };
@@ -3879,7 +3886,128 @@ function setupPortfolioModals() {
     
     console.log('✅ setupPortfolioModals: Completed');
 }
+/**
+ * Recalculate portfolio dari awal (untuk debugging/fix data)
+ */
+function recalculatePortfolioFromScratch() {
+    console.log('🧮 Recalculating portfolio from scratch...');
+    
+    // 1. Hitung dari trading data
+    const totalTradingPL = tradingData.reduce((sum, trade) => {
+        return sum + (parseFloat(trade.profitLoss) || 0);
+    }, 0);
+    
+    // 2. Gunakan existing cash data atau default
+    const totalTopUp = portfolioData.summary?.totalTopUp || 0;
+    const totalWithdraw = portfolioData.summary?.totalWithdraw || 0;
+    
+    // 3. Rebuild summary object
+    portfolioData.summary = {
+        totalTopUp: totalTopUp,
+        totalWithdraw: totalWithdraw,
+        totalPL: Math.round(totalTradingPL),
+        totalEquity: Math.round(totalTopUp - totalWithdraw + totalTradingPL),
+        availableCash: Math.round(totalTopUp - totalWithdraw + totalTradingPL),
+        growthPercent: (totalTopUp - totalWithdraw) > 0 ? 
+            (totalTradingPL / (totalTopUp - totalWithdraw) * 100) : 0,
+        lastUpdated: new Date().toISOString()
+    };
+    
+    console.log('✅ Portfolio recalculated:', portfolioData.summary);
+    
+    // 4. Update UI
+    updatePortfolioUI();
+    
+    return portfolioData.summary;
+}
 // Portfolio Data Loading
+function syncPortfolioWithTradingData() {
+    console.log('🔄 [SYNC] Syncing portfolio with trading data...');
+    
+    try {
+        // 1. Validasi data tersedia
+        if (!tradingData || tradingData.length === 0) {
+            console.log('ℹ️ No trading data to sync');
+            
+            // Reset ke 0 jika tidak ada data
+            if (portfolioData.summary) {
+                portfolioData.summary.totalPL = 0;
+                portfolioData.summary.totalEquity = 
+                    (portfolioData.summary.totalTopUp || 0) - 
+                    (portfolioData.summary.totalWithdraw || 0);
+                portfolioData.summary.availableCash = portfolioData.summary.totalEquity;
+            }
+            return;
+        }
+        
+        // 2. Hitung total P/L dari tradingData (dengan validasi)
+        let totalTradingPL = 0;
+        let validTrades = 0;
+        
+        tradingData.forEach(trade => {
+            const pl = parseFloat(trade.profitLoss);
+            if (!isNaN(pl)) {
+                totalTradingPL += pl;
+                validTrades++;
+            } else {
+                console.warn('⚠️ Invalid profitLoss in trade:', trade);
+            }
+        });
+        
+        console.log(`📈 Calculated P/L: ${formatCurrency(totalTradingPL)} from ${validTrades}/${tradingData.length} valid trades`);
+        
+        // 3. Update portfolioData.summary jika ada
+        if (portfolioData.summary) {
+            const oldPL = portfolioData.summary.totalPL || 0;
+            const oldEquity = portfolioData.summary.totalEquity || 0;
+            
+            // Update values
+            portfolioData.summary.totalPL = Math.round(totalTradingPL);
+            
+            // Equity = Initial Capital + Trading P/L
+            // Initial Capital = Total Top Up - Total Withdraw
+            const initialCapital = 
+                (portfolioData.summary.totalTopUp || 0) - 
+                (portfolioData.summary.totalWithdraw || 0);
+            
+            portfolioData.summary.totalEquity = Math.round(initialCapital + totalTradingPL);
+            portfolioData.summary.availableCash = portfolioData.summary.totalEquity;
+            
+            // Update timestamp
+            portfolioData.summary.lastUpdated = new Date().toISOString();
+            
+            // Calculate growth percentage (if initial capital > 0)
+            if (initialCapital > 0) {
+                portfolioData.summary.growthPercent = 
+                    ((totalTradingPL / initialCapital) * 100);
+            }
+            
+            console.log('✅ Portfolio updated:', {
+                'Previous PL': formatCurrency(oldPL),
+                'New PL': formatCurrency(totalTradingPL),
+                'Change': formatCurrency(totalTradingPL - oldPL),
+                'Equity': formatCurrency(portfolioData.summary.totalEquity)
+            });
+            
+            // 4. Update UI jika portfolio section aktif
+            if (document.getElementById('portfolio')?.classList.contains('active')) {
+                console.log('🎨 Updating portfolio UI...');
+                updatePortfolioUI();
+            }
+            
+            // 5. Update dashboard metrics juga
+            updateDashboardWithPortfolioInfo();
+            
+        } else {
+            console.warn('⚠️ Portfolio summary not initialized, initializing...');
+            initializePortfolioData();
+            syncPortfolioWithTradingData(); // Retry
+        }
+        
+    } catch (error) {
+        console.error('❌ Error syncing portfolio with trading data:', error);
+    }
+}
 async function fetchPortfolioSummary() {
     console.log('📊 fetchPortfolioSummary: Fetching summary data...');
     
@@ -4267,6 +4395,15 @@ function updateWithdrawFormData() {
         maxWithdrawEl.textContent = `Rp ${formatNumber(availableCash)}`;
         console.log('✅ Updated maxWithdraw display');
     }
+}
+function updateDashboardWithPortfolioInfo() {
+    // Update home dashboard jika perlu
+    const equityElement = document.getElementById('totalEquity');
+    if (equityElement && portfolioData.summary) {
+        equityElement.textContent = formatCurrency(portfolioData.summary.totalEquity);
+    }
+    
+    console.log('🏠 Dashboard updated with portfolio info');
 }
 // Portfolio Transactions
 async function addPortfolioTransaction(transactionData) {
@@ -6087,7 +6224,7 @@ async function handleEditSubmit(event) {
         }
         
         console.log('✅ Data saved to Google Sheets');
-        
+        syncPortfolioWithTradingData();
         // Tampilkan notifikasi sukses
         showNotification('success', '✅ Data Diupdate!', 
             `Data trading berhasil diupdate!\n\nKode Saham: ${tradingData[index].kodeSaham}\nProfit/Loss: ${formatCurrency(tradingData[index].profitLoss)}`, 
@@ -6279,6 +6416,7 @@ function hardRefreshDashboard() {
     
     // 1. Pakai data yang SUDAH DIUPDATE di memory
     const currentData = [...tradingData];
+    syncPortfolioWithTradingData();
     console.log(`📊 Using ${currentData.length} records from memory`);
     
     // 2. Debug: Tampilkan perubahan saham
@@ -6780,7 +6918,7 @@ async function deleteTradingData(id) {
     
     // Simpan perubahan
     await saveData();
-    
+    syncPortfolioWithTradingData();
     // Sembunyikan loading
     hideLoading();
     
@@ -6830,4 +6968,46 @@ async function saveData() {
         alert('❌ Gagal menyimpan data ke Google Sheets!\n\nError: ' + error.message);
         return false;
     }
+}
+
+
+//TESTING 
+// Simpan di console untuk testing
+function testPortfolioSync() {
+    console.log('🧪 TESTING PORTFOLIO SYNC');
+    console.log('='.repeat(50));
+    
+    // 1. Capture current state
+    const beforePL = portfolioData.summary?.totalPL || 0;
+    const beforeEquity = portfolioData.summary?.totalEquity || 0;
+    const tradeCount = tradingData.length;
+    
+    console.log('📊 BEFORE:');
+    console.log('- Portfolio PL:', formatCurrency(beforePL));
+    console.log('- Portfolio Equity:', formatCurrency(beforeEquity));
+    console.log('- Trading Records:', tradeCount);
+    
+    // 2. Calculate expected
+    const calculatedPL = tradingData.reduce((sum, t) => sum + (t.profitLoss || 0), 0);
+    console.log('- Calculated PL from tradingData:', formatCurrency(calculatedPL));
+    console.log('- Difference:', formatCurrency(calculatedPL - beforePL));
+    
+    // 3. Run sync
+    console.log('\n🔄 RUNNING SYNC...');
+    syncPortfolioWithTradingData();
+    
+    // 4. Check after
+    setTimeout(() => {
+        console.log('\n📊 AFTER:');
+        console.log('- Portfolio PL:', formatCurrency(portfolioData.summary?.totalPL || 0));
+        console.log('- Portfolio Equity:', formatCurrency(portfolioData.summary?.totalEquity || 0));
+        console.log('- Match?', portfolioData.summary?.totalPL === Math.round(calculatedPL) ? '✅' : '❌');
+        
+        // 5. Verify UI
+        const uiPL = document.getElementById('totalPL')?.textContent;
+        const uiEquity = document.getElementById('totalEquity')?.textContent;
+        console.log('\n🎨 UI CHECK:');
+        console.log('- UI PL:', uiPL);
+        console.log('- UI Equity:', uiEquity);
+    }, 500);
 }
