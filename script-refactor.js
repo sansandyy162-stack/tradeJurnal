@@ -779,7 +779,7 @@ async function processPendingSync() {
             
             // Update tradingData dengan data terbaru
             tradingData = allData;
-            syncPortfolioWithTradingData();
+            smartSyncPortfolio();
             // Update UI
             updatePendingBadge();
             updateHomeSummary();
@@ -857,7 +857,7 @@ async function smartSaveData() {
             const result = await response.json();
             console.log('✅ Data saved directly to Sheets:', result);
             setTimeout(() => {
-                syncPortfolioWithTradingData();
+                smartSyncPortfolio();
             }, 300);
             
             showOnlineSuccessNotification();
@@ -934,7 +934,7 @@ async function smartSavePositionData(positionData) {
             const result = await response.json();
             console.log('✅ Position data saved directly to Sheets:', result);
             setTimeout(() => {
-                syncPortfolioWithTradingData();
+                smartSyncPortfolio();
            }, 300);
             
             showOnlineSuccessNotification();
@@ -4147,6 +4147,75 @@ async function loadPortfolioData() {
         };
     }
 }
+async function updatePortfolioSummaryInSheets() {
+    console.log('📤 updatePortfolioSummaryInSheets: Saving to Google Sheets...');
+    
+    if (!portfolioData.summary) {
+        console.warn('⚠️ No portfolio summary to save');
+        return { success: false, error: 'No summary data' };
+    }
+    
+    try {
+        // Format data untuk Google Sheets
+        const summary = portfolioData.summary;
+        
+        // Pastikan ada lastUpdated
+        summary.lastUpdated = new Date().toISOString();
+        
+        console.log('📊 Saving portfolio summary:', {
+            totalPL: summary.totalPL,
+            totalEquity: summary.totalEquity,
+            lastUpdated: summary.lastUpdated
+        });
+        
+        // Kirim ke Google Sheets
+        const params = new URLSearchParams({
+            action: 'portfolio/updateSummary',
+            totalTopUp: summary.totalTopUp || 0,
+            totalWithdraw: summary.totalWithdraw || 0,
+            totalPL: summary.totalPL || 0,
+            totalEquity: summary.totalEquity || 0,
+            availableCash: summary.availableCash || 0,
+            growthPercent: summary.growthPercent || 0,
+            lastUpdated: summary.lastUpdated
+        });
+        
+        const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
+        console.log('📤 Sending to:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('📥 Server response:', result);
+        
+        if (result.success) {
+            console.log('✅ Portfolio summary saved to Google Sheets');
+            return { success: true };
+        } else {
+            throw new Error(result.error || 'Failed to save portfolio summary');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error saving portfolio summary to Sheets:', error);
+        
+        // Simpan ke pending queue jika online/offline system sudah ada
+        const pendingData = getPendingData();
+        if (pendingData) {
+            console.log('📴 Saving to pending queue for retry...');
+            // Anda bisa extend pending system untuk portfolio
+        }
+        
+        return { 
+            success: false, 
+            error: error.message,
+            message: 'Gagal menyimpan portfolio ke Google Sheets'
+        };
+    }
+}
 // Portfolio UI
 function updatePortfolioUI() {
     console.log('🎨 updatePortfolioUI: Updating portfolio UI...');
@@ -4396,15 +4465,7 @@ function updateWithdrawFormData() {
         console.log('✅ Updated maxWithdraw display');
     }
 }
-function updateDashboardWithPortfolioInfo() {
-    // Update home dashboard jika perlu
-    const equityElement = document.getElementById('totalEquity');
-    if (equityElement && portfolioData.summary) {
-        equityElement.textContent = formatCurrency(portfolioData.summary.totalEquity);
-    }
-    
-    console.log('🏠 Dashboard updated with portfolio info');
-}
+
 // Portfolio Transactions
 async function addPortfolioTransaction(transactionData) {
     console.log('➕ addPortfolioTransaction:', transactionData);
@@ -4698,6 +4759,575 @@ function resetPortfolioForm(formId) {
         }
     }
 }
+
+//new function
+/**
+ * Sync portfolio summary dengan latest trading data dan save ke Google Sheets
+ * Dipanggil setiap kali trading data berubah
+ */
+async function syncPortfolioWithTradingData() {
+    console.log('🔄 [SYNC] Syncing portfolio with trading data...');
+    
+    try {
+        // 1. Validasi data tersedia
+        if (!tradingData || tradingData.length === 0) {
+            console.log('ℹ️ No trading data to sync');
+            
+            // Reset ke 0 jika tidak ada data
+            if (portfolioData.summary) {
+                portfolioData.summary.totalPL = 0;
+                portfolioData.summary.totalEquity = 
+                    (portfolioData.summary.totalTopUp || 0) - 
+                    (portfolioData.summary.totalWithdraw || 0);
+                portfolioData.summary.availableCash = portfolioData.summary.totalEquity;
+                portfolioData.summary.lastUpdated = new Date().toISOString();
+                
+                // Calculate growth percentage
+                const initialCapital = portfolioData.summary.totalEquity;
+                if (initialCapital > 0) {
+                    portfolioData.summary.growthPercent = 0;
+                }
+            }
+            
+            // Auto-save ke Sheets meski data kosong
+            await autoSavePortfolioToSheets();
+            return;
+        }
+        
+        // 2. Hitung total P/L dari tradingData (dengan validasi)
+        let totalTradingPL = 0;
+        let validTrades = 0;
+        
+        tradingData.forEach(trade => {
+            const pl = parseFloat(trade.profitLoss);
+            if (!isNaN(pl)) {
+                totalTradingPL += pl;
+                validTrades++;
+            } else {
+                console.warn('⚠️ Invalid profitLoss in trade:', trade);
+            }
+        });
+        
+        console.log(`📈 Calculated P/L: ${formatCurrency(totalTradingPL)} from ${validTrades}/${tradingData.length} valid trades`);
+        
+        // 3. Update portfolioData.summary jika ada
+        if (portfolioData.summary) {
+            const oldPL = portfolioData.summary.totalPL || 0;
+            const oldEquity = portfolioData.summary.totalEquity || 0;
+            
+            // Update values
+            portfolioData.summary.totalPL = Math.round(totalTradingPL);
+            
+            // Equity = Initial Capital + Trading P/L
+            // Initial Capital = Total Top Up - Total Withdraw
+            const initialCapital = 
+                (portfolioData.summary.totalTopUp || 0) - 
+                (portfolioData.summary.totalWithdraw || 0);
+            
+            portfolioData.summary.totalEquity = Math.round(initialCapital + totalTradingPL);
+            portfolioData.summary.availableCash = portfolioData.summary.totalEquity;
+            
+            // Update timestamp
+            portfolioData.summary.lastUpdated = new Date().toISOString();
+            
+            // Calculate growth percentage (if initial capital > 0)
+            if (initialCapital > 0) {
+                portfolioData.summary.growthPercent = 
+                    ((totalTradingPL / initialCapital) * 100);
+            } else {
+                portfolioData.summary.growthPercent = 0;
+            }
+            
+            console.log('✅ Portfolio updated:', {
+                'Previous PL': formatCurrency(oldPL),
+                'New PL': formatCurrency(totalTradingPL),
+                'Change': formatCurrency(totalTradingPL - oldPL),
+                'Equity': formatCurrency(portfolioData.summary.totalEquity),
+                'Last Updated': portfolioData.summary.lastUpdated
+            });
+            
+            // 4. Save to Google Sheets
+            const saveResult = await autoSavePortfolioToSheets();
+            
+            if (!saveResult.success) {
+                console.warn('⚠️ Portfolio updated locally but failed to save to Sheets:', saveResult.error);
+                
+                // Save to pending queue untuk retry nanti
+                savePortfolioToPendingQueue({
+                    type: 'portfolio_update',
+                    summary: portfolioData.summary,
+                    timestamp: new Date().toISOString(),
+                    retryCount: 0
+                });
+            }
+            
+            // 5. Update UI jika portfolio section aktif
+            if (document.getElementById('portfolio')?.classList.contains('active')) {
+                console.log('🎨 Updating portfolio UI...');
+                updatePortfolioUI();
+            }
+            
+            // 6. Update dashboard metrics juga
+            updateDashboardWithPortfolioInfo();
+            
+        } else {
+            console.warn('⚠️ Portfolio summary not initialized, initializing...');
+            initializePortfolioData();
+            await syncPortfolioWithTradingData(); // Retry dengan await
+        }
+        
+    } catch (error) {
+        console.error('❌ Error syncing portfolio with trading data:', error);
+        
+        // Show error notification to user
+        showNotification('error', '❌ Sync Gagal', 
+            `Gagal menyinkronkan portfolio dengan data trading:\n\n${error.message}\n\nData tetap tersimpan secara lokal.`,
+            false);
+    }
+}
+
+/**
+ * Auto-save portfolio summary ke Google Sheets
+ */
+async function autoSavePortfolioToSheets() {
+    console.log('💾 autoSavePortfolioToSheets: Saving to Google Sheets...');
+    
+    if (!portfolioData.summary) {
+        console.warn('⚠️ No portfolio summary to save');
+        return { success: false, error: 'No summary data' };
+    }
+    
+    // Check online status
+    if (!navigator.onLine) {
+        console.log('📴 Offline mode - portfolio saved to pending queue');
+        return { 
+            success: false, 
+            error: 'Offline mode',
+            message: 'Data disimpan ke pending queue'
+        };
+    }
+    
+    try {
+        const summary = portfolioData.summary;
+        
+        // Prepare data for Google Sheets
+        const params = new URLSearchParams({
+            action: 'portfolio/updateSummary',
+            totalTopUp: summary.totalTopUp || 0,
+            totalWithdraw: summary.totalWithdraw || 0,
+            totalPL: summary.totalPL || 0,
+            totalEquity: summary.totalEquity || 0,
+            availableCash: summary.availableCash || 0,
+            growthPercent: summary.growthPercent || 0,
+            lastUpdated: summary.lastUpdated || new Date().toISOString()
+        });
+        
+        const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
+        console.log('📤 Sending portfolio to Sheets:', url);
+        
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(url, {
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('📥 Portfolio save response:', result);
+        
+        if (result.success) {
+            console.log('✅ Portfolio summary saved to Google Sheets');
+            
+            // Clear any pending portfolio data
+            clearPortfolioPendingQueue();
+            
+            return { success: true, data: result };
+        } else {
+            throw new Error(result.error || 'Failed to save portfolio summary');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error saving portfolio to Sheets:', error);
+        
+        // Determine error type for user-friendly message
+        let errorMessage = error.message;
+        if (error.name === 'AbortError') {
+            errorMessage = 'Timeout: Server tidak merespon. Coba lagi nanti.';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Tidak dapat terhubung ke server. Cek koneksi internet.';
+        }
+        
+        return { 
+            success: false, 
+            error: errorMessage,
+            details: error.toString()
+        };
+    }
+}
+
+/**
+ * Save portfolio changes to pending queue for offline/retry
+ */
+function savePortfolioToPendingQueue(data) {
+    try {
+        const pendingKey = 'portfolio_pending_changes';
+        const existing = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+        
+        const pendingItem = {
+            id: `PORTFOLIO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+            data: data,
+            status: 'pending',
+            retryCount: 0
+        };
+        
+        existing.push(pendingItem);
+        localStorage.setItem(pendingKey, JSON.stringify(existing));
+        
+        console.log('📝 Portfolio saved to pending queue:', pendingItem.id);
+        
+        // Update pending badge
+        updatePortfolioPendingBadge(existing.length);
+        
+        return pendingItem.id;
+        
+    } catch (error) {
+        console.error('❌ Error saving to portfolio pending queue:', error);
+        return null;
+    }
+}
+
+/**
+ * Clear portfolio pending queue after successful sync
+ */
+function clearPortfolioPendingQueue() {
+    localStorage.removeItem('portfolio_pending_changes');
+    updatePortfolioPendingBadge(0);
+    console.log('🧹 Cleared portfolio pending queue');
+}
+
+/**
+ * Update portfolio pending badge
+ */
+function updatePortfolioPendingBadge(count) {
+    const badge = document.getElementById('portfolio-pending-badge') || createPortfolioPendingBadge();
+    
+    if (count > 0) {
+        const countElement = document.getElementById('portfolio-pending-count');
+        if (countElement) {
+            countElement.textContent = count;
+        }
+        badge.style.display = 'flex';
+        badge.title = `${count} perubahan portfolio menunggu sync`;
+        
+        // Add urgent styling if many pending items
+        if (count > 5) {
+            badge.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+            badge.style.animation = 'pulse 1s infinite';
+        }
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+/**
+ * Create portfolio pending badge UI
+ */
+function createPortfolioPendingBadge() {
+    const badge = document.createElement('div');
+    badge.id = 'portfolio-pending-badge';
+    badge.style.cssText = `
+        position: fixed;
+        top: 50px;
+        right: 15px;
+        background: linear-gradient(135deg, #f39c12, #e67e22);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        z-index: 9998;
+        box-shadow: 0 3px 8px rgba(243, 156, 18, 0.3);
+        animation: pulse 2s infinite;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        gap: 4px;
+    `;
+    
+    badge.innerHTML = `
+        <span>💰</span>
+        <span id="portfolio-pending-count">0</span>
+        <span>Portfolio</span>
+    `;
+    
+    // Click to show pending portfolio changes
+    badge.addEventListener('click', showPortfolioPendingDetails);
+    
+    document.body.appendChild(badge);
+    return badge;
+}
+
+/**
+ * Show portfolio pending details
+ */
+function showPortfolioPendingDetails() {
+    const pendingKey = 'portfolio_pending_changes';
+    const pendingData = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+    
+    if (pendingData.length === 0) {
+        showNotification('info', '💰 Portfolio Sync', 'Tidak ada perubahan portfolio yang pending.', true);
+        return;
+    }
+    
+    let detailsHTML = `Anda memiliki ${pendingData.length} perubahan portfolio pending:\n\n`;
+    
+    pendingData.forEach((item, index) => {
+        const timeAgo = getTimeAgo(item.timestamp);
+        const plChange = item.data.summary?.totalPL ? 
+            `P/L: ${formatCurrency(item.data.summary.totalPL)}` : 'Data portfolio';
+        detailsHTML += `${index + 1}. ${plChange} (${timeAgo})\n`;
+    });
+    
+    detailsHTML += `\nStatus: ${navigator.onLine ? '🌐 ONLINE - Akan sync otomatis' : '📴 OFFLINE - Menunggu koneksi'}`;
+    
+    if (navigator.onLine) {
+        detailsHTML += `\n\nKlik "Sync Now" untuk sync manual.`;
+        
+        // Add sync button in notification
+        showNotification('warning', '💰 Portfolio Pending', detailsHTML, false);
+        
+        const syncBtn = document.getElementById('notificationBtn');
+        if (syncBtn) {
+            syncBtn.textContent = '🔄 Sync Portfolio';
+            syncBtn.onclick = function() {
+                processPendingPortfolioSync();
+                closeNotification();
+            };
+        }
+    } else {
+        showNotification('warning', '💰 Portfolio Pending', detailsHTML, false);
+    }
+}
+
+/**
+ * Process pending portfolio sync
+ */
+async function processPendingPortfolioSync() {
+    const pendingKey = 'portfolio_pending_changes';
+    const pendingData = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+    
+    if (pendingData.length === 0) {
+        console.log('✅ No pending portfolio changes to sync');
+        return;
+    }
+    
+    console.log(`🔄 Processing ${pendingData.length} pending portfolio changes...`);
+    
+    try {
+        // Get the latest portfolio data
+        const latestPortfolio = pendingData[pendingData.length - 1].data.summary;
+        
+        if (latestPortfolio) {
+            // Update local portfolio data
+            portfolioData.summary = { ...latestPortfolio };
+            
+            // Save to Sheets
+            const saveResult = await autoSavePortfolioToSheets();
+            
+            if (saveResult.success) {
+                // Clear pending queue
+                clearPortfolioPendingQueue();
+                
+                // Update UI
+                updatePortfolioUI();
+                
+                showNotification('success', '✅ Portfolio Synced', 
+                    `${pendingData.length} perubahan portfolio berhasil di-sync ke Google Sheets!`,
+                    true);
+            } else {
+                throw new Error('Failed to save portfolio to Sheets');
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error processing pending portfolio sync:', error);
+        showNotification('error', '❌ Sync Gagal', 
+            'Gagal sync perubahan portfolio:\n\n' + error.message,
+            false);
+    }
+}
+
+/**
+ * Smart sync portfolio dengan error handling dan offline support
+ */
+async function smartSyncPortfolio() {
+    console.log('💾 Smart sync portfolio initiated...');
+    
+    try {
+        // Update local data first
+        const oldPL = portfolioData.summary?.totalPL || 0;
+        
+        // Recalculate dari trading data
+        const totalTradingPL = tradingData.reduce((sum, trade) => {
+            return sum + (parseFloat(trade.profitLoss) || 0);
+        }, 0);
+        
+        // Only proceed if there's a change
+        if (Math.abs(totalTradingPL - oldPL) < 100 && oldPL !== 0) {
+            console.log('ℹ️ No significant change in P/L, skipping sync');
+            return { success: true, skipped: true };
+        }
+        
+        // Use the main sync function
+        await syncPortfolioWithTradingData();
+        
+        return { success: true };
+        
+    } catch (error) {
+        console.error('❌ Error in smart portfolio sync:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Update dashboard dengan info portfolio terbaru
+ */
+function updateDashboardWithPortfolioInfo() {
+    try {
+        // Update home dashboard jika ada elemen terkait portfolio
+        const elements = [
+            { id: 'totalEquity', value: portfolioData.summary?.totalEquity },
+            { id: 'totalPortfolioPL', value: portfolioData.summary?.totalPL },
+            { id: 'availableCash', value: portfolioData.summary?.availableCash }
+        ];
+        
+        elements.forEach(item => {
+            const element = document.getElementById(item.id);
+            if (element && item.value !== undefined) {
+                element.textContent = formatCurrency(item.value);
+            }
+        });
+        
+        console.log('🏠 Dashboard updated with portfolio info');
+        
+    } catch (error) {
+        console.warn('⚠️ Error updating dashboard with portfolio info:', error);
+    }
+}
+
+/**
+ * Setup portfolio sync system
+ */
+function setupPortfolioSyncSystem() {
+    console.log('🔧 Setting up portfolio sync system...');
+    
+    // Listen for online/offline events
+    window.addEventListener('online', function() {
+        console.log('🌐 Online - checking for pending portfolio changes...');
+        
+        const pendingKey = 'portfolio_pending_changes';
+        const pendingData = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+        
+        if (pendingData.length > 0) {
+            console.log(`🔄 Found ${pendingData.length} pending portfolio changes, syncing...`);
+            setTimeout(() => {
+                processPendingPortfolioSync();
+            }, 2000);
+        }
+    });
+    
+    // Check for pending changes on app start
+    setTimeout(() => {
+        const pendingKey = 'portfolio_pending_changes';
+        const pendingData = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+        
+        if (pendingData.length > 0 && navigator.onLine) {
+            console.log(`📋 Found ${pendingData.length} pending portfolio changes from previous session`);
+            
+            showNotification('info', '💰 Sync Portfolio', 
+                `Ditemukan ${pendingData.length} perubahan portfolio dari session sebelumnya.\n\nMenyinkronisasi ke Google Sheets...`,
+                true);
+            
+            setTimeout(() => {
+                processPendingPortfolioSync();
+            }, 3000);
+        }
+    }, 5000);
+    
+    console.log('✅ Portfolio sync system ready');
+}
+
+/**
+ * Force update portfolio from trading data (manual trigger)
+ */
+async function forcePortfolioUpdate() {
+    console.log('💥 FORCE PORTFOLIO UPDATE');
+    
+    showLoading('Memperbarui portfolio...');
+    
+    try {
+        // Recalculate everything
+        const totalTradingPL = tradingData.reduce((sum, trade) => {
+            return sum + (parseFloat(trade.profitLoss) || 0);
+        }, 0);
+        
+        // Update portfolio
+        if (portfolioData.summary) {
+            portfolioData.summary.totalPL = Math.round(totalTradingPL);
+            
+            const initialCapital = 
+                (portfolioData.summary.totalTopUp || 0) - 
+                (portfolioData.summary.totalWithdraw || 0);
+            
+            portfolioData.summary.totalEquity = Math.round(initialCapital + totalTradingPL);
+            portfolioData.summary.availableCash = portfolioData.summary.totalEquity;
+            portfolioData.summary.lastUpdated = new Date().toISOString();
+            
+            if (initialCapital > 0) {
+                portfolioData.summary.growthPercent = ((totalTradingPL / initialCapital) * 100);
+            }
+        }
+        
+        // Save to Sheets
+        const saveResult = await autoSavePortfolioToSheets();
+        
+        // Update UI
+        updatePortfolioUI();
+        updateDashboardWithPortfolioInfo();
+        
+        hideLoading();
+        
+        if (saveResult.success) {
+            showNotification('success', '✅ Portfolio Diperbarui', 
+                `Portfolio berhasil diperbarui dan disimpan ke Google Sheets!\n\nTotal P/L: ${formatCurrency(totalTradingPL)}`,
+                true);
+        } else {
+            showNotification('warning', '⚠️ Data Disimpan Lokal', 
+                'Portfolio diperbarui secara lokal tetapi gagal disimpan ke Google Sheets.\n\n' +
+                'Data akan dicoba simpan otomatis saat online kembali.',
+                false);
+        }
+        
+        return saveResult;
+        
+    } catch (error) {
+        console.error('❌ Error in force portfolio update:', error);
+        hideLoading();
+        showNotification('error', '❌ Gagal Memperbarui', 
+            'Gagal memperbarui portfolio:\n\n' + error.message,
+            false);
+        return { success: false, error: error.message };
+    }
+}
+
 // ================================
 // SECTION 8: UI & NOTIFICATION FUNCTIONS
 // ================================
@@ -5241,7 +5871,7 @@ async function initializeApp() {
         updateLoadingProgress(20, 'Menyiapkan sistem sync...');
         setupAutoSync();
         addDebugRefreshButton(); // ⭐⭐ BARU: Tambahkan tombol debug
-        
+        setupPortfolioSyncSystem();
         updateLoadingProgress(30, 'Menyiapkan UI...');
         setupStatusIndicator();
         createPendingBadge();
@@ -6224,7 +6854,7 @@ async function handleEditSubmit(event) {
         }
         
         console.log('✅ Data saved to Google Sheets');
-        syncPortfolioWithTradingData();
+        smartSyncPortfolio();
         // Tampilkan notifikasi sukses
         showNotification('success', '✅ Data Diupdate!', 
             `Data trading berhasil diupdate!\n\nKode Saham: ${tradingData[index].kodeSaham}\nProfit/Loss: ${formatCurrency(tradingData[index].profitLoss)}`, 
@@ -6416,7 +7046,7 @@ function hardRefreshDashboard() {
     
     // 1. Pakai data yang SUDAH DIUPDATE di memory
     const currentData = [...tradingData];
-    syncPortfolioWithTradingData();
+    smartSyncPortfolio();
     console.log(`📊 Using ${currentData.length} records from memory`);
     
     // 2. Debug: Tampilkan perubahan saham
@@ -6918,7 +7548,7 @@ async function deleteTradingData(id) {
     
     // Simpan perubahan
     await saveData();
-    syncPortfolioWithTradingData();
+    smartSyncPortfolio();
     // Sembunyikan loading
     hideLoading();
     
@@ -6994,7 +7624,7 @@ function testPortfolioSync() {
     
     // 3. Run sync
     console.log('\n🔄 RUNNING SYNC...');
-    syncPortfolioWithTradingData();
+    smartSyncPortfolio();
     
     // 4. Check after
     setTimeout(() => {
@@ -7010,4 +7640,81 @@ function testPortfolioSync() {
         console.log('- UI PL:', uiPL);
         console.log('- UI Equity:', uiEquity);
     }, 500);
+}
+// Test function
+async function testCompletePortfolioFlow() {
+    console.log('🧪 TEST COMPLETE PORTFOLIO FLOW');
+    
+    // 1. Capture initial state
+    const initialSheetsPL = await getPortfolioPLFromSheets();
+    const initialLocalPL = portfolioData.summary?.totalPL || 0;
+    
+    console.log('Initial - Sheets PL:', initialSheetsPL, 'Local PL:', initialLocalPL);
+    
+    // 2. Add test trade
+    const testTrade = {
+        id: 'TEST-' + Date.now(),
+        profitLoss: 50000
+    };
+    
+    tradingData.push(testTrade);
+    
+    // 3. Trigger sync
+    await smartSyncPortfolio();
+    
+    // 4. Wait and check
+    setTimeout(async () => {
+        const updatedSheetsPL = await getPortfolioPLFromSheets();
+        const updatedLocalPL = portfolioData.summary?.totalPL || 0;
+        
+        console.log('Updated - Sheets PL:', updatedSheetsPL, 'Local PL:', updatedLocalPL);
+        console.log('Expected change: +50,000');
+        console.log('Sheets change:', updatedSheetsPL - initialSheetsPL);
+        console.log('Local change:', updatedLocalPL - initialLocalPL);
+        
+        // Cleanup
+        tradingData.pop();
+        await smartSyncPortfolio();
+        
+    }, 3000);
+}
+
+// Helper function
+async function getPortfolioPLFromSheets() {
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=portfolio/getSummary`);
+        const data = await response.json();
+        return data.summary?.totalPL || 0;
+    } catch (error) {
+        console.error('Error fetching from Sheets:', error);
+        return 0;
+    }
+}
+function testOfflinePortfolioSync() {
+    // Simulate offline
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    
+    console.log('📴 Testing offline mode...');
+    
+    // Add trade
+    tradingData.push({
+        id: 'OFFLINE-TEST',
+        profitLoss: 25000
+    });
+    
+    // Trigger sync (should save to pending queue)
+    smartSyncPortfolio();
+    
+    // Check pending queue
+    const pending = JSON.parse(localStorage.getItem('portfolio_pending_changes') || '[]');
+    console.log('Pending items:', pending.length);
+    
+    // Restore online
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    
+    // Trigger pending sync
+    processPendingPortfolioSync();
+    
+    // Cleanup
+    tradingData.pop();
 }
