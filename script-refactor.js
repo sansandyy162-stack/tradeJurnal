@@ -4170,7 +4170,7 @@ async function updatePortfolioSummaryInSheets() {
         
         // Kirim ke Google Sheets
         const params = new URLSearchParams({
-            action: 'portfolio/updateSummary',
+            action: 'portfolio/update',
             totalTopUp: summary.totalTopUp || 0,
             totalWithdraw: summary.totalWithdraw || 0,
             totalPL: summary.totalPL || 0,
@@ -4912,7 +4912,7 @@ async function autoSavePortfolioToSheets() {
         
         // Prepare data for Google Sheets
         const params = new URLSearchParams({
-            action: 'portfolio/updateSummary',
+            action: 'portfolio/update',
             totalTopUp: summary.totalTopUp || 0,
             totalWithdraw: summary.totalWithdraw || 0,
             totalPL: summary.totalPL || 0,
