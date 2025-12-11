@@ -4577,16 +4577,18 @@ async function editTransaction(transactionId) {
     console.log('📋 Found transaction:', transaction);
     
     // Untuk edit, kita perlu endpoint baru di GS
-    // Untuk sekarang, tampilkan info saja
-    alert(
-        `Edit Transaction (Coming Soon)\n\n` +
+    // Untuk sekarang, tampilkan info dengan MODAL
+    const modalTitle = 'Edit Transaction (Coming Soon)';
+    const modalMessage = 
         `ID: ${transaction.id}\n` +
         `Type: ${transaction.type}\n` +
         `Amount: Rp ${formatNumber(Math.abs(transaction.amount))}\n` +
         `Method: ${transaction.method}\n` +
         `Notes: ${transaction.notes || '(empty)'}\n\n` +
-        `Edit functionality will be available in next update.`
-    );
+        `Edit functionality will be available in next update.`;
+    
+    // Gunakan modal informasi, bukan alert()
+    await showInfoModal(modalTitle, modalMessage);
     
     console.log('⚠️ Edit functionality not yet implemented');
     showPortfolioNotification('info', 'Fitur edit akan segera tersedia');
