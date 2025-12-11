@@ -4608,32 +4608,34 @@ async function deleteTransaction(transactionId) {
         return;
     }
     
-    // Konfirmasi delete
+    // Konfirmasi delete dengan MODAL (bukan alert)
     const isTopUp = transaction.type === 'TOP_UP';
     const actionText = isTopUp ? 'TOP UP' : 'WITHDRAW';
     const amountText = `Rp ${formatNumber(Math.abs(transaction.amount))}`;
     const dateText = new Date(transaction.timestamp).toLocaleDateString('id-ID');
     
-    const confirmation = confirm(
-        `HAPUS TRANSAKSI?\n\n` +
+    const modalTitle = 'HAPUS TRANSAKSI?';
+    const modalMessage = 
         `Tanggal: ${dateText}\n` +
         `Jenis: ${actionText}\n` +
         `Jumlah: ${amountText}\n` +
         `Metode: ${transaction.method || '-'}\n` +
         `Catatan: ${transaction.notes || '-'}\n\n` +
-        `Transaksi akan dihapus permanen!`
-    );
+        `Transaksi akan dihapus permanen!`;
+    
+    // Gunakan modal confirmation, bukan alert()
+    const confirmation = await showConfirmationModal(modalTitle, modalMessage);
     
     if (!confirmation) {
         console.log('❌ Delete cancelled by user');
         return;
     }
     
+    // ⭐ LOGIC DELETE YANG SAMA (tidak diubah) ⭐
     try {
         console.log('🗑️ Deleting transaction...');
         showPortfolioLoading('Menghapus transaksi...');
         
-        // ⭐⭐ PERBAIKAN: Gunakan GET parameters ⭐⭐
         const params = new URLSearchParams({
             action: 'portfolio/delete',
             id: transactionId
