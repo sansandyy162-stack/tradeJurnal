@@ -1561,9 +1561,9 @@ function filterDataByDateRange(data, startDate, endDate) {
     }
     
     const filtered = data.filter(item => {
-        const tradeDate = item.tanggalMasuk;
+        const tradeDate = item.tanggalKeluar;
         if (!tradeDate) {
-            console.warn('⚠️ Item tanpa tanggalMasuk:', item);
+            console.warn('⚠️ Item tanpa tanggalKeluar:', item);
             return false;
         }
         
@@ -2535,9 +2535,9 @@ function updateLineChart(data) {
     // Group data per hari
     const dailyData = {};
     data.forEach(item => {
-        if (!item.tanggalMasuk) return;
+        if (!item.tanggalKeluar) return;
         
-        const day = item.tanggalMasuk.split('T')[0]; // Extract YYYY-MM-DD
+        const day = item.tanggalKeluar.split('T')[0]; // Extract YYYY-MM-DD
         if (!dailyData[day]) {
             dailyData[day] = {
                 totalPL: 0,
@@ -2841,9 +2841,9 @@ function updateBarChart(data) {
     // Group data per hari
     const dailyData = {};
     data.forEach(item => {
-        if (!item.tanggalMasuk) return;
+        if (!item.tanggalKeluar) return;
         
-        const day = item.tanggalMasuk.split('T')[0];
+        const day = item.tanggalKeluar.split('T')[0];
         if (!dailyData[day]) {
             dailyData[day] = {
                 totalPL: 0,
@@ -3483,8 +3483,8 @@ function analyzeForInsights(data) {
     // Analyze by day
     const dailyData = {};
     data.forEach(item => {
-        if (!item.tanggalMasuk) return;
-        const date = new Date(item.tanggalMasuk);
+        if (!item.tanggalKeluar) return;
+        const date = new Date(item.tanggalKeluar);
         const day = date.getDay(); // 0 = Sunday, 6 = Saturday
         
         if (!dailyData[day]) {
@@ -6668,7 +6668,7 @@ function applyFilters() {
     }
     
     if (bulan) {
-        filteredData = filteredData.filter(item => item.tanggalMasuk.startsWith(bulan));
+        filteredData = filteredData.filter(item => item.tanggalKeluar.startsWith(bulan));
     }
     
     if (saham) {
@@ -7651,6 +7651,7 @@ function runPortfolioGETTest() {
         }
     });
 }
+
 
 
 
