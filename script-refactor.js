@@ -4261,8 +4261,8 @@ function updatePortfolioUI() {
         
         // Update breakdown section
         const netCashFlowValue = summary.totalTopUp - summary.totalWithdraw;
-        const totalPLValue = Math.abs(summary.totalPL);
-        const calculatedEquityValue = netCashFlowValue - totalPLValue;
+        const totalPLValue = summary.totalPL;
+        const calculatedEquityValue = netCashFlowValue + totalPLValue;
         
         const breakdownElements = [
             { id: 'initialCapital', value: formatRp(summary.totalTopUp) },
